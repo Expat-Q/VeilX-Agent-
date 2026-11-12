@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@types/elliptic": "^6.4.18",
+    "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "dotenv": "^16.4.5",
     "elliptic": "^6.6.1",
@@ -29,6 +30,7 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.5.4",
+    "viem": "^2.57.19",
     "zod": "^3.23.8"
   },
   "devDependencies": {
