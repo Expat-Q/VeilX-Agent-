@@ -12,10 +12,13 @@ export async function GET(req: NextRequest) {
 
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "";
   let dynamicCallback: string | undefined = undefined;
-  if (host.includes("veilxapp.onrender.com")) {
-    dynamicCallback = "https://veilxapp.onrender.com/api/auth/callback/twitter";
-  } else if (host.includes("localhost") || host.includes("127.0.0.1")) {
-    dynamicCallback = `http://${host}/api/auth/callback/twitter`;
+  if (process.env.TWITTER_CALLBACK_URL) {
+    dynamicCallback = process.env.TWITTER_CALLBACK_URL;
+  } else if (process.env.NEXT_PUBLIC_APP_URL) {
+    dynamicCallback = `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/auth/callback/twitter`;
+  } else if (host) {
+    const proto = req.headers.get("x-forwarded-proto") || (host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https");
+    dynamicCallback = `${proto}://${host}/api/auth/callback/twitter`;
   }
 
   const effectiveCallback = getEffectiveTwitterCallbackUrl(dynamicCallback);

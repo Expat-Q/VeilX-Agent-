@@ -27,6 +27,9 @@ export function getEffectiveTwitterCallbackUrl(customCallback?: string): string 
   if (process.env.TWITTER_CALLBACK_URL) {
     return process.env.TWITTER_CALLBACK_URL;
   }
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/auth/callback/twitter`;
+  }
   return DEFAULT_CALLBACK_URL;
 }
 
