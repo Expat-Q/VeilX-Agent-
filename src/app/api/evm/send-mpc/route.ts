@@ -57,13 +57,31 @@ export async function POST(req: NextRequest) {
     }
 
     const liveEthPrice = await getLiveEthPrice();
+    const parsedAmount = Number(asset === "ETH" ? (amountEth || amount) : amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return NextResponse.json(
+        { error: "Invalid transfer amount: must be a positive number greater than 0" },
+        { status: 400 }
+      );
+    }
+
     const transferAmountUsd = asset === "ETH" 
-      ? Number(amountEth || amount || 0) * liveEthPrice 
-      : Number(amount || 0);
+      ? parsedAmount * liveEthPrice 
+      : parsedAmount;
 
     // 2. Spending Cap Validation
     await connectToDatabase();
     const userDoc = await User.findOne({ xHandle: sessionUser.xHandle.toLowerCase() });
+
+    if (senderNearAccountId && sessionUser.nearAccountId && senderNearAccountId !== sessionUser.nearAccountId) {
+      if (userDoc && userDoc.nearAccountId !== senderNearAccountId) {
+        return NextResponse.json(
+          { error: "Forbidden: senderNearAccountId does not match session account" },
+          { status: 403 }
+        );
+      }
+    }
+
     if (userDoc) {
       const remainingCap = (userDoc.spendingLimitUsd || 50) - (userDoc.spentUsd || 0);
       if (transferAmountUsd > remainingCap) {

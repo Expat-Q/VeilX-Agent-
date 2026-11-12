@@ -5,6 +5,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifySessionToken } from "@/lib/session";
+import { connectToDatabase } from "@/lib/mongodb";
+import { User } from "@/models/User";
 import { createPublicClient, http, keccak256, serializeTransaction } from "viem";
 import { base, baseSepolia, arbitrumSepolia, sepolia } from "viem/chains";
 import {
@@ -86,6 +88,26 @@ export async function POST(req: NextRequest) {
         { error: "senderNearAccountId is required" },
         { status: 400 }
       );
+    }
+
+    const numAmount = Number(amountEth || amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return NextResponse.json(
+        { error: "Invalid amount: must be a positive number greater than 0" },
+        { status: 400 }
+      );
+    }
+
+    // Verify senderNearAccountId belongs to the authenticated user
+    if (sessionUser.nearAccountId && senderNearAccountId !== sessionUser.nearAccountId) {
+      await connectToDatabase();
+      const dbUser = await User.findOne({ xHandle: sessionUser.xHandle.toLowerCase() });
+      if (dbUser && dbUser.nearAccountId !== senderNearAccountId) {
+        return NextResponse.json(
+          { error: "Forbidden: senderNearAccountId does not match session account" },
+          { status: 403 }
+        );
+      }
     }
 
     // Resolve target chain config

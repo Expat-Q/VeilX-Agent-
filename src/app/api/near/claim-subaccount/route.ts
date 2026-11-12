@@ -140,7 +140,16 @@ export async function POST(req: NextRequest) {
           claimTxHash = tx.transaction.hash;
         }
       } catch (onchainErr: any) {
-        console.warn("[Stealth Factory] On-chain claim call fallback to deterministic hash:", onchainErr.message);
+        console.error("[Stealth Factory] On-chain claim call failed:", onchainErr);
+        // Release claiming lock so user can retry claiming
+        await EscrowTip.updateOne(
+          { tipId, status: "claiming" },
+          { $set: { status: "pending" }, $unset: { claimLockedAt: 1 } }
+        );
+        return NextResponse.json(
+          { error: `On-chain claim failed: ${onchainErr.message || "Contract execution error"}` },
+          { status: 500 }
+        );
       }
     }
 

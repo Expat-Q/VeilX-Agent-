@@ -89,12 +89,15 @@ export async function GET(req: Request) {
     const results: SearchUserResult[] = [];
     const seenHandles = new Set<string>();
 
+    // Escape regex special characters to prevent regex injection
+    const sanitizedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
     // 1. Check MongoDB for registered users starting with query
     try {
       const conn = await connectToDatabase();
       if (conn && conn.connection.readyState === 1) {
         const dbUsers = await User.find({
-          xHandle: { $regex: `^${query}`, $options: "i" },
+          xHandle: { $regex: `^${sanitizedQuery}`, $options: "i" },
         }).limit(5);
 
         for (const u of dbUsers) {

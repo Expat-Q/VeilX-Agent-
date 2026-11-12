@@ -2118,6 +2118,12 @@ export function ChatContainer() {
 
         const transferUsdEstimate = targetAsset === "NEAR"
           ? Number((targetAmount * oraclePrices.near).toFixed(2))
+          : (targetAsset === "ETH" || targetAsset === "WETH")
+          ? Number((targetAmount * oraclePrices.eth).toFixed(2))
+          : (targetAsset === "BTC" || targetAsset === "cbBTC")
+          ? Number((targetAmount * 68000).toFixed(2))
+          : (targetAsset === "SOL")
+          ? Number((targetAmount * 150).toFixed(2))
           : targetAmount;
 
         const budgetCheck = validateSpendBudget(transferUsdEstimate, user?.xHandle);
@@ -2200,6 +2206,9 @@ export function ChatContainer() {
           estimatedFeeUsd: isDirectEvm ? 0.01 : 0.04,
           expiresAt: Date.now() + 60000,
           isExecuting: false,
+          isQuarantined: budgetCheck.isQuarantined,
+          quarantineReason: budgetCheck.error,
+          perTxMax: budgetCheck.perTxMax,
         };
 
         const recipientLabel = result.args.recipientHandle ? `@${result.args.recipientHandle}` : recipient;

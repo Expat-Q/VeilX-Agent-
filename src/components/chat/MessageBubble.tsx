@@ -414,6 +414,11 @@ export function MessageBubble({
           {/* Action Card: Cross-Chain Intent (Defuse 1Click Route) */}
           {message.actionCard?.type === "cross_chain_intent" && (
             <div className="mt-3 p-3.5 rounded-2xl bg-[#FAF7F0] border border-[#EBE3D5] space-y-3 shadow-2xs">
+              {message.actionCard.data.isQuarantined && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 text-xs flex items-center gap-2">
+                  ⚠️ This intent exceeds your <strong>${Number(message.actionCard.data.perTxMax || 15).toFixed(2)}</strong> auto-approval cap. Click Authorize to execute manually.
+                </div>
+              )}
               <div className="flex items-center justify-between text-xs font-bold text-[#1E1315]">
                 <span className="font-semibold text-xs tracking-tight">
                   Cross-Chain Intent Route
@@ -497,7 +502,7 @@ export function MessageBubble({
                         <span>Settling via Solvers...</span>
                       </>
                     ) : (
-                      <span>Confirm &amp; Execute Intent</span>
+                      <span>{message.actionCard.data.isQuarantined ? "Authorize & Execute Spend" : "Confirm & Execute Intent"}</span>
                     )}
                   </button>
                   <button

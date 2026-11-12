@@ -19,6 +19,17 @@ export async function POST(req: Request) {
 
 async function handleReconciliation(req: Request) {
   try {
+    const authHeader = req.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
+
+    // Protect reconciliation worker: Require valid Bearer CRON_SECRET if configured
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json(
+        { error: "Unauthorized: Invalid reconciliation bearer secret" },
+        { status: 401 }
+      );
+    }
+
     await connectToDatabase();
 
     let reconciledCount = 0;

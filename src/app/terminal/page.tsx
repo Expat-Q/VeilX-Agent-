@@ -319,6 +319,17 @@ export default function TerminalPage() {
 
   useEffect(() => {
     loadPortfolioData();
+
+    const handleSync = () => {
+      loadPortfolioData();
+    };
+
+    window.addEventListener("veilx_activity_updated", handleSync);
+    window.addEventListener("focus", handleSync);
+    return () => {
+      window.removeEventListener("veilx_activity_updated", handleSync);
+      window.removeEventListener("focus", handleSync);
+    };
   }, [loadPortfolioData]);
 
   // Rehydrate terminal chat history from localStorage and MongoDB Atlas
