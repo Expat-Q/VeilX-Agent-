@@ -102,8 +102,9 @@ export async function GET(req: NextRequest) {
     cookieStore.delete("oauth_return_to");
 
     return NextResponse.redirect(new URL(`${savedReturnTo}?connected=true&handle=${cleanHandle}`, baseUrl));
-  } catch (error) {
+  } catch (error: any) {
     console.error("Twitter OAuth Callback Error:", error);
-    return NextResponse.redirect(new URL(`${savedReturnTo}?error=oauth_failed`, baseUrl));
+    const reason = error?.message || "unknown_error";
+    return NextResponse.redirect(new URL(`${savedReturnTo}?error=oauth_failed&reason=${encodeURIComponent(reason)}`, baseUrl));
   }
 }

@@ -2,8 +2,8 @@
 // Official Twitter / 𝕏 OAuth 2.0 PKCE Handler
 import crypto from "crypto";
 
-const TWITTER_CLIENT_ID = process.env.TWITTER_CLIENT_ID || "ZWtCY2dsVEFTb01MSUM2dkViV0Y6MTpjaQ";
-const TWITTER_CLIENT_SECRET = process.env.TWITTER_CLIENT_SECRET || "";
+const getClientId = () => (process.env.TWITTER_CLIENT_ID || "ZWtCY2dsVEFTb01MSUM2dkViV0Y6MTpjaQ").trim();
+const getClientSecret = () => (process.env.TWITTER_CLIENT_SECRET || "").trim();
 const DEFAULT_CALLBACK_URL = "http://localhost:3000/api/auth/callback/twitter";
 
 export function getBaseAppUrl(req?: { headers: { get: (name: string) => string | null } }): string {
@@ -11,24 +11,24 @@ export function getBaseAppUrl(req?: { headers: { get: (name: string) => string |
     const forwardedHost = req.headers.get("x-forwarded-host");
     const forwardedProto = req.headers.get("x-forwarded-proto") || "http";
     if (forwardedHost) {
-      return `${forwardedProto}://${forwardedHost}`;
+      return `${forwardedProto}://${forwardedHost.trim()}`;
     }
   }
 
   if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+    return process.env.NEXT_PUBLIC_APP_URL.trim().replace(/\/$/, "");
   }
 
   return "http://localhost:3000";
 }
 
 export function getEffectiveTwitterCallbackUrl(customCallback?: string): string {
-  if (customCallback) return customCallback;
+  if (customCallback) return customCallback.trim();
   if (process.env.TWITTER_CALLBACK_URL) {
-    return process.env.TWITTER_CALLBACK_URL;
+    return process.env.TWITTER_CALLBACK_URL.trim();
   }
   if (process.env.NEXT_PUBLIC_APP_URL) {
-    return `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/auth/callback/twitter`;
+    return `${process.env.NEXT_PUBLIC_APP_URL.trim().replace(/\/$/, "")}/api/auth/callback/twitter`;
   }
   return DEFAULT_CALLBACK_URL;
 }
@@ -45,9 +45,10 @@ export function generatePkcePair() {
 
 export function getTwitterAuthUrl(state: string, codeChallenge: string, customCallback?: string) {
   const callbackUrl = getEffectiveTwitterCallbackUrl(customCallback);
+  const clientId = getClientId();
   const params = new URLSearchParams({
     response_type: "code",
-    client_id: TWITTER_CLIENT_ID,
+    client_id: clientId,
     redirect_uri: callbackUrl,
     scope: "tweet.read users.read offline.access",
     state: state,
@@ -60,10 +61,12 @@ export function getTwitterAuthUrl(state: string, codeChallenge: string, customCa
 
 export async function exchangeCodeForToken(code: string, codeVerifier: string, customCallback?: string) {
   const callbackUrl = getEffectiveTwitterCallbackUrl(customCallback);
+  const clientId = getClientId();
+  const clientSecret = getClientSecret();
   const params = new URLSearchParams({
     code: code,
     grant_type: "authorization_code",
-    client_id: TWITTER_CLIENT_ID,
+    client_id: clientId,
     redirect_uri: callbackUrl,
     code_verifier: codeVerifier,
   });
@@ -72,8 +75,8 @@ export async function exchangeCodeForToken(code: string, codeVerifier: string, c
     "Content-Type": "application/x-www-form-urlencoded",
   };
 
-  if (TWITTER_CLIENT_SECRET) {
-    const basicAuth = Buffer.from(`${TWITTER_CLIENT_ID}:${TWITTER_CLIENT_SECRET}`).toString("base64");
+  if (clientSecret) {
+    const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
     headers["Authorization"] = `Basic ${basicAuth}`;
   }
 
