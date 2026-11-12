@@ -29,6 +29,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SpendingCapModal } from "@/components/modals/SpendingCapModal";
 import { TwitterClaimModal } from "@/components/modals/TwitterClaimModal";
 import { AuthModal } from "@/components/modals/AuthModal";
+import { OAuthStatusModal } from "@/components/modals/OAuthStatusModal";
 import { getStoredAgentSession, freezeAgentSession, unfreezeAgentSession } from "@/lib/near-embedded-wallet";
 
 export function HeaderNav() {
@@ -421,6 +422,9 @@ export function HeaderNav() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
       />
+
+      {/* OAuth Result Status Modal (Success / Error) */}
+      <OAuthStatusModal onRetryLogin={() => setIsAuthModalOpen(true)} />
     </>
   );
 }

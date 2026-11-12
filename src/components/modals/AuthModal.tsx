@@ -150,7 +150,8 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
             <button
               onClick={() => {
                 setIsSubmitting(true);
-                window.location.href = "/api/auth/twitter";
+                const currentPath = typeof window !== "undefined" ? window.location.pathname : "/terminal";
+                window.location.href = `/api/auth/twitter?returnTo=${encodeURIComponent(currentPath)}`;
               }}
               disabled={isSubmitting}
               className="w-full h-12 rounded-2xl bg-[#1E1315] hover:bg-[#2C1D20] disabled:opacity-50 text-[#FAF7F0] text-xs font-bold flex items-center justify-center gap-2.5 transition shadow-xs cursor-pointer"

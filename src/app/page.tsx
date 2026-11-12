@@ -36,11 +36,8 @@ export default function LandingPage() {
       const handleParam = params.get("handle");
 
       if (isConnected) {
-        window.history.replaceState({}, "", window.location.pathname);
-        const handle = handleParam || user?.xHandle;
         localStorage.setItem("veil_onboarded", "true");
         localStorage.setItem("veilx_onboarded", "true");
-        router.push("/terminal");
       } else if (isLoggedIn && user?.xHandle) {
         const hasOnboarded = localStorage.getItem("veilx_onboarded");
         if (hasOnboarded) {

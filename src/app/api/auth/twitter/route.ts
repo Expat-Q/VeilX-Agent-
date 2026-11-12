@@ -30,17 +30,19 @@ export async function GET(req: NextRequest) {
     !host.includes("127.0.0.1") &&
     (req.headers.get("x-forwarded-proto") === "https" || req.nextUrl.protocol === "https:");
 
-  // Capture return destination (strictly default to /terminal for seamless app entry)
+  // Capture return destination (preserves current page, defaults to /terminal if unspecified)
   const returnToParam = req.nextUrl.searchParams.get("returnTo");
   let safeReturnTo = "/terminal";
-  if (returnToParam && returnToParam !== "/") {
+  if (returnToParam) {
     try {
       const parsed = new URL(returnToParam, "http://localhost:3000");
-      if (parsed.pathname && !parsed.pathname.startsWith("/api") && parsed.pathname !== "/") {
+      if (parsed.pathname && !parsed.pathname.startsWith("/api")) {
         safeReturnTo = parsed.pathname;
       }
     } catch {
-      safeReturnTo = "/terminal";
+      if (returnToParam.startsWith("/") && !returnToParam.startsWith("/api")) {
+        safeReturnTo = returnToParam;
+      }
     }
   }
 

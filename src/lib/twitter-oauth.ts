@@ -95,8 +95,9 @@ export async function exchangeCodeForToken(code: string, codeVerifier: string, c
 }
 
 export async function getTwitterMe(accessToken: string) {
-  const res = await fetch(
-    "https://api.twitter.com/2/users/me?user.fields=profile_image_url,name,username,description,verified,public_metrics",
+  // Try with profile_image_url first
+  let res = await fetch(
+    "https://api.twitter.com/2/users/me?user.fields=profile_image_url",
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -104,10 +105,26 @@ export async function getTwitterMe(accessToken: string) {
     }
   );
 
+  // If that fails, fallback to bare /2/users/me
   if (!res.ok) {
-    throw new Error("Failed to fetch Twitter user profile");
+    const firstError = await res.text().catch(() => "");
+    console.warn(`[Twitter OAuth] Profile request with fields failed (${res.status}): ${firstError}. Retrying bare /2/users/me...`);
+    res = await fetch("https://api.twitter.com/2/users/me", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  }
+
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => "unknown");
+    console.error(`[Twitter OAuth] Failed to fetch Twitter user profile (${res.status}):`, errorBody);
+    throw new Error(`Failed to fetch Twitter profile (${res.status}): ${errorBody}`);
   }
 
   const json = await res.json();
+  if (!json?.data) {
+    throw new Error(`Twitter response missing data object: ${JSON.stringify(json)}`);
+  }
   return json.data;
 }
