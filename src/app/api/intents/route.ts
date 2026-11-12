@@ -157,11 +157,29 @@ export async function PATCH(req: Request) {
     }
 
     // Ownership check: If senderHandle is recorded, verify against session
-    if (intent.senderHandle && intent.senderHandle.toLowerCase() !== sessionUser.xHandle?.toLowerCase()) {
-      return NextResponse.json(
-        { error: "Forbidden: You are not authorized to update this intent order" },
-        { status: 403 }
-      );
+    if (intent.senderHandle) {
+      if (intent.senderHandle.toLowerCase() !== sessionUser.xHandle?.toLowerCase()) {
+        return NextResponse.json(
+          { error: "Forbidden: You are not authorized to update this intent order" },
+          { status: 403 }
+        );
+      }
+    } else {
+      // For guest-created orders, verify association or bind to authenticated user
+      const userAccounts = [
+        sessionUser.xHandle?.toLowerCase(),
+        sessionUser.nearAccountId?.toLowerCase(),
+      ].filter(Boolean);
+      const isRelated = [intent.recipient?.toLowerCase(), intent.senderWallet?.toLowerCase()]
+        .some((addr) => addr && userAccounts.includes(addr));
+      if (!isRelated && !intent.depositTxHash) {
+        intent.senderHandle = sessionUser.xHandle.toLowerCase();
+      } else if (!isRelated) {
+        return NextResponse.json(
+          { error: "Forbidden: You are not authorized to modify this intent order" },
+          { status: 403 }
+        );
+      }
     }
 
     if (status) intent.status = status;

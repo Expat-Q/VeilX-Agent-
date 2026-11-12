@@ -61,6 +61,23 @@ export function WalletSessionModal({
   // Derived EVM Address via NEAR Chain Signatures MPC
   const derivedEvm = useDerivedEvm(session?.accountId);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   // External Wallet States
   const [externalWallet, setExternalWallet] = useState<ConnectedExternalWallet | null>(null);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
@@ -314,8 +331,14 @@ export function WalletSessionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-brown-950/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-[94vw] sm:w-full max-w-lg bg-white border border-butter-300 rounded-3xl p-4 sm:p-6 shadow-elevated relative overflow-hidden max-h-[88vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-brown-950/40 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="w-[94vw] sm:w-full max-w-lg bg-white border border-butter-300 rounded-3xl p-4 sm:p-6 shadow-elevated relative overflow-hidden max-h-[88vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Top Header */}
         <div className="flex items-center justify-between pb-4 mb-4 border-b border-butter-200">
           <div className="flex items-center gap-2.5">

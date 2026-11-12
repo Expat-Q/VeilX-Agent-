@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useCallback } from "react";
 import {
   ShieldCheck,
   KeyRound,
@@ -24,20 +24,43 @@ export function SessionOnboardingModal({
   xHandle,
   nearAccountId,
 }: SessionOnboardingModalProps) {
-  if (!isOpen) return null;
-
-  const handleDismiss = () => {
+  const handleDismiss = useCallback(() => {
     try {
       localStorage.setItem("veilx_onboarded", "true");
     } catch {
       // ignore local storage errors
     }
     onClose();
-  };
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleDismiss();
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, handleDismiss]);
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brown-950/40 backdrop-blur-sm animate-in fade-in">
-      <div className="w-full max-w-lg bg-white border border-butter-300 rounded-[2rem] p-6 sm:p-7 shadow-elevated space-y-5 relative">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brown-950/40 backdrop-blur-sm animate-in fade-in"
+      onClick={handleDismiss}
+    >
+      <div
+        className="w-full max-w-lg bg-white border border-butter-300 rounded-[2rem] p-6 sm:p-7 shadow-elevated space-y-5 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Top Header */}
         <div className="flex items-center justify-between pb-2 border-b border-butter-200">
           <div className="flex items-center gap-2">

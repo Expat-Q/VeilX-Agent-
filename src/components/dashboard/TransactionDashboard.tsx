@@ -25,6 +25,7 @@ import {
   EyeOff,
   Filter,
   Settings,
+  Sliders,
 } from "lucide-react";
 import {
   getTransactions,
@@ -32,6 +33,11 @@ import {
   TransactionRecord,
   PayLinkRecord,
 } from "@/lib/transactions-store";
+import {
+  getStoredAgentSession,
+  freezeAgentSession,
+  unfreezeAgentSession,
+} from "@/lib/near-embedded-wallet";
 import { DepositModal } from "@/components/modals/DepositModal";
 import { WithdrawModal } from "@/components/modals/WithdrawModal";
 import { WalletSettingsModal } from "@/components/modals/WalletSettingsModal";
@@ -44,8 +50,41 @@ import { PortfolioPosition } from "@/lib/market-analyst";
 import { TradingRule } from "@/lib/trading-copilot";
 
 export function TransactionDashboard() {
-  const { user, isLoading, balanceUsd, nearBalance, nearTokens, evmBalance, refreshAccountData, networkMode } = useAuth();
+  const {
+    user,
+    isLoading,
+    balanceUsd,
+    nearBalance,
+    nearTokens,
+    evmBalance,
+    refreshAccountData,
+    networkMode,
+    spendingLimitUsd = 50.0,
+    spentUsd = 0.0,
+  } = useAuth();
   const handle = user?.xHandle || "guest";
+
+  const [isAgentFrozen, setIsAgentFrozen] = useState(false);
+
+  useEffect(() => {
+    if (user?.xHandle) {
+      const session = getStoredAgentSession(user.xHandle);
+      setIsAgentFrozen(Boolean(session?.isFrozen));
+    }
+  }, [user?.xHandle]);
+
+  const handleToggleFreeze = () => {
+    if (!user?.xHandle) return;
+    if (isAgentFrozen) {
+      unfreezeAgentSession(user.xHandle);
+      setIsAgentFrozen(false);
+    } else {
+      freezeAgentSession(user.xHandle);
+      setIsAgentFrozen(true);
+    }
+  };
+
+  const capRatio = spendingLimitUsd > 0 ? Math.min(100, Math.round((spentUsd / spendingLimitUsd) * 100)) : 0;
 
   // Unified Dashboard Tabs: "all_holdings" | "rules" | "paylinks" | "transfers"
   const [activeTab, setActiveTab] = useState<"all_holdings" | "rules" | "paylinks" | "transfers">("all_holdings");
@@ -235,7 +274,37 @@ export function TransactionDashboard() {
     fetchAllPrices();
     const interval = setInterval(fetchAllPrices, 25000);
     return () => clearInterval(interval);
-  }, [loadPortfolio, positions.length]);
+  }, [loadPortfolio, positions]);
+
+  // Terminal-to-Dashboard Real-time Synchronization
+  useEffect(() => {
+    const handlePaperCashSync = (e: any) => {
+      const val =
+        e?.detail?.paperCashUsd ??
+        e?.detail?.cash ??
+        e?.detail?.value ??
+        (typeof e?.detail === "number" ? e.detail : undefined);
+      if (typeof val === "number" && !isNaN(val)) {
+        setPaperCashUsd(val);
+        sessionStorage.setItem("veil_cached_paper_cash_usd", String(val));
+      }
+    };
+
+    const handleActivitySync = () => {
+      loadPortfolio();
+      const localTxs = getTransactions(handle);
+      setTransactions(localTxs);
+      const localLinks = getPayLinks(handle);
+      setPayLinks(localLinks);
+    };
+
+    window.addEventListener("veil_paper_cash_updated", handlePaperCashSync);
+    window.addEventListener("veilx_activity_updated", handleActivitySync);
+    return () => {
+      window.removeEventListener("veil_paper_cash_updated", handlePaperCashSync);
+      window.removeEventListener("veilx_activity_updated", handleActivitySync);
+    };
+  }, [loadPortfolio, handle]);
 
   useEffect(() => {
     const localTxs = getTransactions(handle);
@@ -481,11 +550,20 @@ export function TransactionDashboard() {
     : Number((positionsValueUsd + onChainLiquidUsd).toFixed(2));
   const activeRulesCount = rules.filter((r) => r.status === "active").length;
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+
   const filteredTransactions = transactions.filter((tx) => {
     if (activityFilter === "inflow") return tx.isInflow;
     if (activityFilter === "outflow") return !tx.isInflow;
     return true;
   });
+
+  const totalPages = Math.ceil(filteredTransactions.length / pageSize) || 1;
+  const paginatedTransactions = filteredTransactions.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   // Unified holdings list combining tokenized stocks, paper capital, and crypto assets
   const unifiedHoldings = useMemo(() => {
@@ -835,6 +913,56 @@ export function TransactionDashboard() {
             >
               <Settings className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+
+        {/* Dashboard Spending Cap & Safety Guardrail Card */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#EBE3D5] shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-[#1E1315]" />
+                <span className="text-xs font-bold text-[#1E1315]">Autonomous Daily Spending Cap</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#FAF7F0] border border-[#EBE3D5] text-[#6E5D4F]">
+                  ${spentUsd.toFixed(2)} / ${spendingLimitUsd.toFixed(2)} USD ({capRatio}%)
+                </span>
+              </div>
+              <p className="text-[11px] text-[#6E5D4F]">
+                Guaranteed mathematical ceiling for autonomous trading and micro-tips.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                className="px-3 py-1.5 rounded-xl border border-[#EBE3D5] bg-[#FAF7F0] hover:bg-white text-xs font-semibold text-[#1E1315] transition cursor-pointer"
+              >
+                Configure Caps
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleFreeze}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                  isAgentFrozen
+                    ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                    : "bg-[#FAF7F0] text-[#1E1315] border-[#EBE3D5] hover:bg-white"
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${isAgentFrozen ? "bg-rose-600 animate-ping" : "bg-emerald-500"}`} />
+                <span>{isAgentFrozen ? "Frozen (Resume)" : "Emergency Freeze"}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full bg-[#FAF7F0] h-2.5 rounded-full overflow-hidden border border-[#EBE3D5]">
+            <div
+              className={`h-full transition-all duration-500 ${
+                capRatio > 85 ? "bg-rose-600" : capRatio > 60 ? "bg-amber-500" : "bg-[#1E1315]"
+              }`}
+              style={{ width: `${capRatio}%` }}
+            />
           </div>
         </div>
 
@@ -1393,59 +1521,100 @@ export function TransactionDashboard() {
                 No transactions recorded yet in this category.
               </div>
             ) : (
-              <div className="divide-y divide-[#F2EBDC]">
-                {filteredTransactions.map((tx) => (
-                  <div
-                    key={tx.id}
-                    className="p-4 flex items-center justify-between gap-3 hover:bg-[#FAF7F0]/60 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                          tx.isInflow ? "bg-emerald-50 text-emerald-800" : "bg-[#FAF3E0] text-[#1E1315]"
-                        }`}
-                      >
-                        {tx.isInflow ? (
-                          <ArrowDownLeft className="w-4 h-4" />
-                        ) : (
-                          <ArrowUpRight className="w-4 h-4" />
-                        )}
-                      </div>
-                      <div className="truncate">
-                        <div className="font-bold text-xs text-[#1E1315] truncate">
-                          {tx.title}
+              <div>
+                <div className="divide-y divide-[#F2EBDC]">
+                  {paginatedTransactions.map((tx) => (
+                    <div
+                      key={tx.id}
+                      className="p-4 flex items-center justify-between gap-3 hover:bg-[#FAF7F0]/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                            tx.isInflow ? "bg-emerald-50 text-emerald-800" : "bg-[#FAF3E0] text-[#1E1315]"
+                          }`}
+                        >
+                          {tx.isInflow ? (
+                            <ArrowDownLeft className="w-4 h-4" />
+                          ) : (
+                            <ArrowUpRight className="w-4 h-4" />
+                          )}
                         </div>
-                        <div className="text-[10px] text-[#7A6A5E] font-mono truncate">
-                          {tx.timestamp} • {tx.counterparty}
+                        <div className="truncate">
+                          <div className="font-bold text-xs text-[#1E1315] truncate">
+                            {tx.title}
+                          </div>
+                          <div className="text-[10px] text-[#7A6A5E] font-mono truncate">
+                            {tx.timestamp} • {tx.counterparty}
+                          </div>
+                          {tx.txHash && tx.txHash !== "confirmed" && tx.txHash !== "completed" && (
+                            <a
+                              href={
+                                tx.asset === "NEAR"
+                                  ? `https://testnet.nearblocks.io/txns/${tx.txHash}`
+                                  : `https://sepolia.basescan.org/tx/${tx.txHash}`
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-mono text-[#6E5D4F] hover:text-[#1E1315] underline mt-0.5"
+                            >
+                              <span>Explorer</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
                         </div>
                       </div>
-                    </div>
 
-                    <div className="text-right shrink-0 font-mono">
-                      <div
-                        className={`font-bold text-xs ${
-                          tx.isInflow ? "text-emerald-700" : "text-[#1E1315]"
-                        } ${blurClass}`}
-                      >
-                        {tx.isInflow ? "+" : "-"}${tx.amountUsd.toFixed(2)} USD
-                      </div>
-                      <div className="text-[10px] text-[#7A6A5E]">
-                        {tx.status === "escrow_pending" && tx.isInflow ? (
-                          <button
-                            type="button"
-                            onClick={() => handleClaimInflowTip(tx)}
-                            disabled={claimingTxId === tx.id}
-                            className="text-xs font-bold text-emerald-800 underline"
-                          >
-                            {claimingTxId === tx.id ? "Claiming..." : "Claim Tip"}
-                          </button>
-                        ) : (
-                          tx.statusLabel || "Completed"
-                        )}
+                      <div className="text-right shrink-0 font-mono">
+                        <div
+                          className={`font-bold text-xs ${
+                            tx.isInflow ? "text-emerald-700" : "text-[#1E1315]"
+                          } ${blurClass}`}
+                        >
+                          {tx.isInflow ? "+" : "-"}${tx.amountUsd.toFixed(2)} USD
+                        </div>
+                        <div className="text-[10px] text-[#7A6A5E]">
+                          {tx.status === "escrow_pending" && tx.isInflow ? (
+                            <button
+                              type="button"
+                              onClick={() => handleClaimInflowTip(tx)}
+                              disabled={claimingTxId === tx.id}
+                              className="text-xs font-bold text-emerald-800 underline"
+                            >
+                              {claimingTxId === tx.id ? "Claiming..." : "Claim Tip"}
+                            </button>
+                          ) : (
+                            tx.statusLabel || "Completed"
+                          )}
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between p-3 border-t border-[#F2EBDC] text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 rounded-lg border border-[#EBE3D5] text-[#1E1315] hover:bg-[#FAF7F0] disabled:opacity-40 transition cursor-pointer"
+                    >
+                      Previous
+                    </button>
+                    <span className="font-mono text-[#6E5D4F]">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 rounded-lg border border-[#EBE3D5] text-[#1E1315] hover:bg-[#FAF7F0] disabled:opacity-40 transition cursor-pointer"
+                    >
+                      Next
+                    </button>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>

@@ -334,6 +334,43 @@ export async function verifyNearTransactionOutcome(
         }
       }
 
+      // Cryptographic receipt & receiver verification
+      const txReceiver = result.transaction?.receiver_id;
+      if (cleanAccount && txReceiver && txReceiver.toLowerCase() !== cleanAccount.toLowerCase()) {
+        return {
+          success: false,
+          error: `Receiver mismatch: expected ${cleanAccount}, got ${txReceiver}`,
+        };
+      }
+
+      // Attached deposit verification in actions (Transfer or FunctionCall) with 2% slippage tolerance
+      if (minDepositNear && minDepositNear > 0) {
+        const actions = result.transaction?.actions || [];
+        let totalDepositYocto = BigInt(0);
+        for (const action of actions) {
+          const actObj = typeof action === "object" ? action : {};
+          const transferDeposit = actObj.Transfer?.deposit || actObj.transfer?.deposit;
+          const fnDeposit = actObj.FunctionCall?.deposit || actObj.functionCall?.deposit || actObj.function_call?.deposit;
+          const directDeposit = actObj.deposit;
+
+          if (transferDeposit) {
+            try { totalDepositYocto += BigInt(transferDeposit); } catch {}
+          } else if (fnDeposit) {
+            try { totalDepositYocto += BigInt(fnDeposit); } catch {}
+          } else if (directDeposit) {
+            try { totalDepositYocto += BigInt(directDeposit); } catch {}
+          }
+        }
+        const divisor = BigInt("1000000000000000000000000");
+        const transferredNear = Number(totalDepositYocto) / Number(divisor);
+        if (transferredNear < minDepositNear * 0.98) {
+          return {
+            success: false,
+            error: `Insufficient deposit: required ${minDepositNear} NEAR, received ${transferredNear.toFixed(4)} NEAR`,
+          };
+        }
+      }
+
       return {
         success: true,
         blockHash: result.transaction_outcome?.block_hash,

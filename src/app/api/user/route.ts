@@ -100,16 +100,16 @@ export async function POST(req: Request) {
 
     const sessionUser = sessionToken ? verifySessionToken(sessionToken) : null;
 
-    if (sessionToken && !sessionUser) {
+    if (!sessionUser) {
       return NextResponse.json(
-        { error: "Unauthorized: Invalid session token" },
+        { error: "Unauthorized: Active authenticated session via Twitter OAuth required" },
         { status: 401 }
       );
     }
 
-    if (sessionUser && sessionUser.xHandle?.toLowerCase() !== cleanHandle.toLowerCase()) {
+    if (sessionUser.xHandle?.toLowerCase() !== cleanHandle.toLowerCase()) {
       return NextResponse.json(
-        { error: "Unauthorized: Active authenticated session does not match this handle" },
+        { error: "Forbidden: Session identity does not match specified handle" },
         { status: 403 }
       );
     }
@@ -124,17 +124,17 @@ export async function POST(req: Request) {
       ],
     });
 
-    // If account exists, caller MUST have a valid session matching cleanHandle
+    // If account exists, verify that session identity matches the user
     if (existingUser) {
-      if (!sessionUser) {
-        return NextResponse.json(
-          { error: "Unauthorized: Active authenticated session required to update existing user" },
-          { status: 401 }
-        );
-      }
       if (sessionUser.xHandle?.toLowerCase() !== cleanHandle.toLowerCase()) {
         return NextResponse.json(
-          { error: "Unauthorized: Active authenticated session does not match this handle" },
+          { error: "Forbidden: Active authenticated session does not match this handle" },
+          { status: 403 }
+        );
+      }
+      if (existingUser.xUserId && sessionUser.xUserId && existingUser.xUserId !== sessionUser.xUserId) {
+        return NextResponse.json(
+          { error: "Forbidden: Twitter User ID mismatch for this account" },
           { status: 403 }
         );
       }
@@ -167,7 +167,7 @@ export async function POST(req: Request) {
     // Issue signed HTTP-only session cookie
     try {
       const signedToken = signSessionPayload({
-        xUserId: user.xUserId || `local_${cleanHandle.toLowerCase()}`,
+        xUserId: sessionUser.xUserId || user.xUserId || `local_${cleanHandle.toLowerCase()}`,
         xHandle: cleanHandle.toLowerCase(),
         nearAccountId: user.nearAccountId,
         avatarUrl: user.avatarUrl,

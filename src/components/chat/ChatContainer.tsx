@@ -496,6 +496,9 @@ export function ChatContainer() {
 
     try {
       const activeSession = getStoredAgentSession(user?.xHandle);
+      if (activeSession?.isFrozen) {
+        throw new Error("Emergency Freeze Active: All autonomous agent transactions are blocked by emergency safety controls.");
+      }
       let clientTxHash = "";
       let effectiveSenderWallet = user?.nearAccountId || "anonymous.testnet";
       const cleanRecipientHandle = (tipData.recipientHandle || "").replace("@", "").trim();
@@ -848,6 +851,9 @@ export function ChatContainer() {
 
     try {
       const activeSession = getStoredAgentSession(user?.xHandle);
+      if (activeSession?.isFrozen) {
+        throw new Error("Emergency Freeze Active: All autonomous agent transactions are blocked by emergency safety controls.");
+      }
       const isEvmTransfer = Boolean(transferData.isEvmTransfer) ||
         Boolean(transferData.isCrossChain) ||
         (transferData.recipientAddress && transferData.recipientAddress.startsWith("0x")) ||
@@ -1074,6 +1080,9 @@ export function ChatContainer() {
 
     try {
       const activeSession = getStoredAgentSession(user?.xHandle);
+      if (activeSession?.isFrozen) {
+        throw new Error("Emergency Freeze Active: All autonomous agent transactions are blocked by emergency safety controls.");
+      }
       const depositTarget = intentData.depositAddress || "solver.Veil-agent.testnet";
 
       let depositTxHash = "";
@@ -2653,15 +2662,35 @@ export function ChatContainer() {
     }
   };
 
+  const activeChatSession = getStoredAgentSession(user?.xHandle);
+  const isSessionRevoked = !activeChatSession || !activeChatSession.publicKey;
+  const isSessionFrozen = Boolean(activeChatSession?.isFrozen);
+
   return (
     <div className="relative flex flex-col h-[calc(100vh-4rem)] h-[calc(100dvh-4rem)] max-w-4xl mx-auto px-2.5 sm:px-4 py-1.5 sm:py-2 w-full overflow-x-hidden">
       {/* Top Controls */}
       <div className="flex items-center justify-between py-1.5 sm:py-2 border-b border-butter-300/60 mb-1 gap-2">
         <div className="text-xs font-semibold text-brown-700 flex items-center gap-1.5 sm:gap-2 min-w-0">
-          <span className="w-2 h-2 rounded-full bg-shield-emerald animate-pulse shrink-0"></span>
+          <span
+            className={`w-2 h-2 rounded-full shrink-0 ${
+              isSessionFrozen
+                ? "bg-rose-600 animate-ping"
+                : isSessionRevoked
+                ? "bg-amber-500"
+                : "bg-shield-emerald animate-pulse"
+            }`}
+          />
           <span className="truncate text-xs font-bold text-brown-800">
-            <span className="sm:hidden">Copilot</span>
-            <span className="hidden sm:inline">Autonomous Social Workspace</span>
+            <span className="sm:hidden">
+              {isSessionFrozen ? "Frozen" : isSessionRevoked ? "Revoked" : "Copilot"}
+            </span>
+            <span className="hidden sm:inline">
+              {isSessionFrozen
+                ? "SESSION FROZEN"
+                : isSessionRevoked
+                ? "SESSION REVOKED"
+                : `Autonomous Social Workspace ($${spendingLimitUsd.toFixed(0)} CAP)`}
+            </span>
           </span>
           <span className="text-[10px] text-brown-400 font-normal hidden md:inline">• Gemini 2.5 Flash</span>
         </div>

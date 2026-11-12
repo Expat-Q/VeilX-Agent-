@@ -48,7 +48,7 @@ export function StockOnboardingModal({ isOpen, onClose, onCompleted }: StockOnbo
   const [stopLossPercent, setStopLossPercent] = useState(5);
   const [takeProfitPercent, setTakeProfitPercent] = useState(10);
 
-  // Fetch live asset quotes upon open
+  // Fetch live asset quotes upon open & modal lifecycle
   useEffect(() => {
     if (isOpen) {
       fetchLiveStockAssets()
@@ -56,6 +56,23 @@ export function StockOnboardingModal({ isOpen, onClose, onCompleted }: StockOnbo
         .catch(() => {});
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   // Virtual Seed Capital
   const totalCapitalUsd = 1000.0;
@@ -149,8 +166,14 @@ export function StockOnboardingModal({ isOpen, onClose, onCompleted }: StockOnbo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-[#140C0E]/70 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
-      <div className="w-full max-w-5xl bg-[#FFFDF9] border border-[#EBE3D5] rounded-[2.25rem] shadow-[0_24px_64px_rgba(30,19,21,0.2)] overflow-hidden flex flex-col lg:flex-row my-auto max-h-[92vh]">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-[#140C0E]/70 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-5xl bg-[#FFFDF9] border border-[#EBE3D5] rounded-[2.25rem] shadow-[0_24px_64px_rgba(30,19,21,0.2)] overflow-hidden flex flex-col lg:flex-row my-auto max-h-[92vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* =========================================================================
             LEFT INTELLIGENCE PANEL: Real-time Live Blueprint & Architecture Specs
            ========================================================================= */}

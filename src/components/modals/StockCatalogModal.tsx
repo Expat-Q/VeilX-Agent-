@@ -57,6 +57,15 @@ export function StockCatalogModal({
 
   useEffect(() => {
     if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
     const tickers = CURATED_STOCK_CATALOG.map((s) => s.symbol).join(",");
     fetch(`/api/prices?symbols=${encodeURIComponent(tickers)}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -74,7 +83,12 @@ export function StockCatalogModal({
         }
       })
       .catch(() => {});
-  }, [isOpen]);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   const existingSymbols = useMemo(
     () => new Set(existingPositions.map((p) => p.symbol)),
@@ -110,8 +124,14 @@ export function StockCatalogModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1315]/40 backdrop-blur-sm animate-in fade-in">
-      <div className="w-full max-w-2xl bg-white border border-[#EBE3D5] rounded-3xl p-6 shadow-xl space-y-5 relative max-h-[85vh] flex flex-col">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1315]/40 backdrop-blur-sm animate-in fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl bg-white border border-[#EBE3D5] rounded-3xl p-6 shadow-xl space-y-5 relative max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#F2EBDC] shrink-0">
           <div className="flex items-center gap-2.5">

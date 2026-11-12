@@ -445,11 +445,14 @@ export default function LandingPage() {
                     Deploy AI capital allocation into NVDAon, TSLAon, and SPYon with real-time momentum tracking.
                   </p>
                 </div>
-                {/* Placeholder action pill */}
-                <div className="bg-[#FAF5EC] border border-[#EBE3D5] text-[#6E5D4F] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center">
-                  <span>Available in App</span>
-                  <ArrowRight className="w-3 h-3 text-[#6E5D4F]" />
-                </div>
+                {/* Action pill */}
+                <Link
+                  href="/terminal"
+                  className="bg-[#FAF5EC] hover:bg-[#FAF0E0] border border-[#EBE3D5] hover:border-[#1E1315] text-[#1E1315] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center transition-all cursor-pointer shadow-2xs group"
+                >
+                  <span>Launch in Terminal</span>
+                  <ArrowRight className="w-3 h-3 text-[#6E5D4F] group-hover:translate-x-0.5 transition-transform" />
+                </Link>
               </div>
 
               {/* Row 02 */}
@@ -470,10 +473,13 @@ export default function LandingPage() {
                     Automated dollar-cost averaging and portfolio rebalancing with guaranteed 20% USDC cash protection.
                   </p>
                 </div>
-                <div className="bg-[#FAF5EC] border border-[#EBE3D5] text-[#6E5D4F] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center">
-                  <span>Available in App</span>
-                  <ArrowRight className="w-3 h-3 text-[#6E5D4F]" />
-                </div>
+                <Link
+                  href="/terminal"
+                  className="bg-[#FAF5EC] hover:bg-[#FAF0E0] border border-[#EBE3D5] hover:border-[#1E1315] text-[#1E1315] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center transition-all cursor-pointer shadow-2xs group"
+                >
+                  <span>Launch in Terminal</span>
+                  <ArrowRight className="w-3 h-3 text-[#6E5D4F] group-hover:translate-x-0.5 transition-transform" />
+                </Link>
               </div>
 
               {/* Row 03 */}
@@ -494,10 +500,13 @@ export default function LandingPage() {
                     Tip any X username directly. Funds wait securely in smart contract escrow until claimed with X login.
                   </p>
                 </div>
-                <div className="bg-[#FAF5EC] border border-[#EBE3D5] text-[#6E5D4F] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center">
-                  <span>Available in App</span>
-                  <ArrowRight className="w-3 h-3 text-[#6E5D4F]" />
-                </div>
+                <Link
+                  href="/chat"
+                  className="bg-[#FAF5EC] hover:bg-[#FAF0E0] border border-[#EBE3D5] hover:border-[#1E1315] text-[#1E1315] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center transition-all cursor-pointer shadow-2xs group"
+                >
+                  <span>Launch in Copilot</span>
+                  <ArrowRight className="w-3 h-3 text-[#6E5D4F] group-hover:translate-x-0.5 transition-transform" />
+                </Link>
               </div>
 
               {/* Row 04 */}
@@ -518,10 +527,13 @@ export default function LandingPage() {
                     Generate shareable links payable from Ethereum, Solana, Base, and NEAR with instant settlement.
                   </p>
                 </div>
-                <div className="bg-[#FAF5EC] border border-[#EBE3D5] text-[#6E5D4F] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center">
-                  <span>Available in App</span>
-                  <ArrowRight className="w-3 h-3 text-[#6E5D4F]" />
-                </div>
+                <Link
+                  href="/chat?mode=invoice"
+                  className="bg-[#FAF5EC] hover:bg-[#FAF0E0] border border-[#EBE3D5] hover:border-[#1E1315] text-[#1E1315] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center transition-all cursor-pointer shadow-2xs group"
+                >
+                  <span>Create PayLink</span>
+                  <ArrowRight className="w-3 h-3 text-[#6E5D4F] group-hover:translate-x-0.5 transition-transform" />
+                </Link>
               </div>
 
               {/* Row 05 */}
@@ -542,10 +554,14 @@ export default function LandingPage() {
                     Recipients claim tips directly to their wallet without pre-funding NEAR or paying gas fees.
                   </p>
                 </div>
-                <div className="bg-[#FAF5EC] border border-[#EBE3D5] text-[#6E5D4F] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center">
-                  <span>Available in App</span>
-                  <ArrowRight className="w-3 h-3 text-[#6E5D4F]" />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsClaimModalOpen(true)}
+                  className="bg-[#FAF5EC] hover:bg-[#FAF0E0] border border-[#EBE3D5] hover:border-[#1E1315] text-[#1E1315] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center transition-all cursor-pointer shadow-2xs group"
+                >
+                  <span>Open Claim Portal</span>
+                  <ArrowRight className="w-3 h-3 text-[#6E5D4F] group-hover:translate-x-0.5 transition-transform" />
+                </button>
               </div>
 
               {/* Row 06 */}
@@ -566,10 +582,13 @@ export default function LandingPage() {
                     Background triggers evaluate market conditions and execute trades in sandbox mode.
                   </p>
                 </div>
-                <div className="bg-[#FAF5EC] border border-[#EBE3D5] text-[#6E5D4F] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center">
-                  <span>Available in App</span>
-                  <ArrowRight className="w-3 h-3 text-[#6E5D4F]" />
-                </div>
+                <Link
+                  href="/terminal"
+                  className="bg-[#FAF5EC] hover:bg-[#FAF0E0] border border-[#EBE3D5] hover:border-[#1E1315] text-[#1E1315] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center transition-all cursor-pointer shadow-2xs group"
+                >
+                  <span>Launch in Terminal</span>
+                  <ArrowRight className="w-3 h-3 text-[#6E5D4F] group-hover:translate-x-0.5 transition-transform" />
+                </Link>
               </div>
             </div>
           </div>
@@ -777,20 +796,20 @@ export default function LandingPage() {
                   </Link>
                 </li>
                 <li>
-                  <button
-                    onClick={handleLaunchFlow}
+                  <Link
+                    href="/chat"
                     className="hover:text-[#1E1315] transition-colors text-left cursor-pointer"
                   >
                     Social Payments
-                  </button>
+                  </Link>
                 </li>
                 <li>
-                  <button
-                    onClick={handleLaunchFlow}
+                  <Link
+                    href="/chat?mode=invoice"
                     className="hover:text-[#1E1315] transition-colors text-left cursor-pointer"
                   >
                     PayLinks
-                  </button>
+                  </Link>
                 </li>
                 <li>
                   <button

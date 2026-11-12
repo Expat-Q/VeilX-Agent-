@@ -113,6 +113,24 @@ export function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isDropdownOpen]);
 
+  // Universal modal lifecycle: close on Escape and prevent body scrolling
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSetMax = () => {
@@ -145,6 +163,7 @@ export function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
 
     setIsSubmitting(true);
     try {
+      let resolvedTxHash = "";
       if (selectedOption.id === "near_native") {
         const session = getStoredAgentSession(user?.xHandle);
         let clientTxHash: string | undefined = undefined;
@@ -185,8 +204,9 @@ export function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
           throw new Error(data.error || "NEAR withdrawal failed");
         }
 
+        resolvedTxHash = data?.txHash || clientTxHash || "";
         setSuccessTx({
-          txHash: data.txHash,
+          txHash: resolvedTxHash,
           explorerUrl: data.explorerUrl,
           asset: selectedOption.symbol,
           chain: selectedOption.chain,
@@ -238,8 +258,9 @@ export function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
           explorerUrl = detectedChain === "arbitrum" ? `https://sepolia.arbiscan.io/tx/${mpcTxHash}` : `https://sepolia.basescan.org/tx/${mpcTxHash}`;
         }
 
+        resolvedTxHash = mpcTxHash || "";
         setSuccessTx({
-          txHash: mpcTxHash,
+          txHash: resolvedTxHash,
           explorerUrl,
           asset: selectedOption.symbol,
           chain: selectedOption.chain,
@@ -261,7 +282,7 @@ export function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
           asset: selectedOption.symbol,
           status: "completed",
           statusLabel: "Withdrawn",
-          txHash: successTx?.txHash || "completed",
+          txHash: resolvedTxHash || "confirmed",
           isInflow: false,
           memo: `Withdrew ${numAmount} ${selectedOption.symbol} on ${selectedOption.chain}`,
         },
@@ -277,8 +298,14 @@ export function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1315]/40 backdrop-blur-sm animate-in fade-in">
-      <div className="w-full max-w-md bg-white border border-[#EBE3D5] rounded-3xl p-6 shadow-xl space-y-5 relative">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1315]/40 backdrop-blur-sm animate-in fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md bg-white border border-[#EBE3D5] rounded-3xl p-6 shadow-xl space-y-5 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#F2EBDC]">
           <div className="flex items-center gap-2.5">

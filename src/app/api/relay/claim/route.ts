@@ -230,7 +230,9 @@ export async function POST(req: NextRequest) {
         await Transaction.updateMany(
           {
             userHandle: lockedTip.senderHandle.replace("@", "").trim().toLowerCase(),
-            $or: [{ memo: { $regex: tipId } }, { counterparty: `@${cleanHandle}` }],
+            ...(lockedTip.depositTxHash
+              ? { $or: [{ memo: { $regex: tipId } }, { txHash: lockedTip.depositTxHash }] }
+              : { memo: { $regex: tipId } }),
             status: "escrow_pending",
           },
           {

@@ -287,6 +287,11 @@ export function processTradingInstruction(
         : "daily";
 
     const currentPrice = match.asset ? match.asset.price : 100.0;
+    if (!currentPrice || currentPrice <= 0 || isNaN(currentPrice)) {
+      return {
+        reply: `Price feed unavailable for ${match.symbol}. Please try again once market oracle quotes are online.`,
+      };
+    }
     const canExecuteInitial = portfolio.cashUsd >= amount;
     const shares = canExecuteInitial ? Number((amount / currentPrice).toFixed(4)) : 0;
     let nextCash = portfolio.cashUsd;
@@ -399,6 +404,11 @@ export function processTradingInstruction(
 
     const amount = extractAmount(text) || 50.0;
     const currentPrice = match.asset ? match.asset.price : 100.0;
+    if (!currentPrice || currentPrice <= 0 || isNaN(currentPrice)) {
+      return {
+        reply: `Price feed unavailable for ${match.symbol}. Please try again once market oracle quotes are online.`,
+      };
+    }
     if (portfolio.cashUsd < amount) {
       return {
         reply: `Insufficient liquid cash. You need $${amount.toFixed(2)} USD but hold $${portfolio.cashUsd.toFixed(2)}.`,
@@ -620,10 +630,16 @@ export function processTradingInstruction(
     }
 
     const price = match.asset ? match.asset.price : 100.0;
+    if (!price || price <= 0 || isNaN(price)) {
+      return {
+        reply: `Price feed unavailable for ${match.symbol}. Please try again once market oracle quotes are online.`,
+      };
+    }
     const sharesBought = Number((amount / price).toFixed(4));
+    const isConfirmed = lower.includes("confirm");
 
     // Zero-Cost Deterministic Policy Gate: Orders > $250 require interactive confirmation card
-    if (amount > 250 && !lower.includes("confirm")) {
+    if (amount > 250 && !isConfirmed) {
       return {
         reply: `Deterministic Safety Gate: Order size ($${amount.toFixed(2)}) exceeds instant execution threshold ($250.00). Co-signature confirmation required:`,
         actionCard: {
@@ -638,6 +654,26 @@ export function processTradingInstruction(
             maxSlippage: "1.0%",
             routing: "Defuse 1Click Solver Intent",
             promptConfirm: `buy $${amount} ${match.symbol} confirm`,
+          },
+        },
+      };
+    }
+
+    if (!isConfirmed) {
+      return {
+        reply: `Trade Intent Generated: Buy ${sharesBought} ${match.symbol} for $${amount.toFixed(2)} at $${price.toFixed(2)} via Defuse 1Click Solver on NEAR. Please confirm to sign and broadcast:`,
+        actionCard: {
+          type: "require_confirmation",
+          title: `Confirm Buy: ${match.symbol}`,
+          details: {
+            symbol: match.symbol,
+            shares: sharesBought,
+            price,
+            amountUsd: amount,
+            feeUsd: 0.04,
+            maxSlippage: "1.0%",
+            routing: "Defuse 1Click Solver (NEAR NEP-141)",
+            promptConfirm: `buy $${amount} ${match.symbol} confirmed`,
           },
         },
       };
@@ -679,10 +715,10 @@ export function processTradingInstruction(
     }
 
     return {
-      reply: `Trade Intent Generated: Buy ${sharesBought} ${match.symbol} for $${amount.toFixed(2)} at $${price.toFixed(2)} via Defuse 1Click Solver on NEAR. Please confirm to sign and broadcast:`,
+      reply: `Trade Executed: Bought ${sharesBought} ${match.symbol} for $${amount.toFixed(2)} at $${price.toFixed(2)} via Defuse 1Click Solver on NEAR. Position updated.`,
       actionCard: {
-        type: "require_confirmation",
-        title: `Confirm Buy: ${match.symbol}`,
+        type: "trade_executed",
+        title: `Trade Executed: ${match.symbol}`,
         details: {
           symbol: match.symbol,
           shares: sharesBought,
@@ -691,7 +727,6 @@ export function processTradingInstruction(
           feeUsd: 0.04,
           maxSlippage: "1.0%",
           routing: "Defuse 1Click Solver (NEAR NEP-141)",
-          promptConfirm: `buy $${amount} ${match.symbol} confirmed`,
         },
       },
       updatedCash: newCash,
@@ -719,10 +754,16 @@ export function processTradingInstruction(
     const isAll = lower.includes("all");
     const amount = isAll ? position.currentValueUsd : Math.min(extractAmount(text) || position.currentValueUsd, position.currentValueUsd);
     const price = match.asset ? match.asset.price : position.currentPrice;
+    if (!price || price <= 0 || isNaN(price)) {
+      return {
+        reply: `Price feed unavailable for ${match.symbol}. Please try again once market oracle quotes are online.`,
+      };
+    }
     const sharesSold = Number((amount / price).toFixed(4));
+    const isConfirmed = lower.includes("confirm");
 
     // Zero-Cost Deterministic Policy Gate: Orders > $250 require interactive confirmation card
-    if (amount > 250 && !lower.includes("confirm")) {
+    if (amount > 250 && !isConfirmed) {
       return {
         reply: `Deterministic Safety Gate: Sell order size ($${amount.toFixed(2)}) exceeds instant execution threshold ($250.00). Co-signature confirmation required:`,
         actionCard: {
@@ -737,6 +778,26 @@ export function processTradingInstruction(
             maxSlippage: "1.0%",
             routing: "Defuse 1Click Solver Intent",
             promptConfirm: `sell $${amount} ${match.symbol} confirm`,
+          },
+        },
+      };
+    }
+
+    if (!isConfirmed) {
+      return {
+        reply: `Trade Intent Generated: Sell ${sharesSold} ${match.symbol} for $${amount.toFixed(2)} USDC via Defuse 1Click Solver. Please confirm to sign and settle:`,
+        actionCard: {
+          type: "require_confirmation",
+          title: `Confirm Sell: ${match.symbol}`,
+          details: {
+            symbol: match.symbol,
+            shares: sharesSold,
+            price,
+            amountUsd: amount,
+            feeUsd: 0.04,
+            maxSlippage: "1.0%",
+            routing: "Defuse 1Click Solver (Liquid USDC Settlement)",
+            promptConfirm: `sell $${amount} ${match.symbol} confirmed`,
           },
         },
       };
@@ -758,10 +819,10 @@ export function processTradingInstruction(
       .filter((p) => p.shares > 0);
 
     return {
-      reply: `Trade Intent Generated: Sell ${sharesSold} ${match.symbol} for $${amount.toFixed(2)} USDC via Defuse 1Click Solver. Please confirm to sign and settle:`,
+      reply: `Trade Executed: Sold ${sharesSold} ${match.symbol} for $${amount.toFixed(2)} USDC via Defuse 1Click Solver. Position updated.`,
       actionCard: {
-        type: "require_confirmation",
-        title: `Confirm Sell: ${match.symbol}`,
+        type: "trade_executed",
+        title: `Trade Executed: ${match.symbol}`,
         details: {
           symbol: match.symbol,
           shares: sharesSold,
@@ -770,7 +831,6 @@ export function processTradingInstruction(
           feeUsd: 0.04,
           maxSlippage: "1.0%",
           routing: "Defuse 1Click Solver (Liquid USDC Settlement)",
-          promptConfirm: `sell $${amount} ${match.symbol} confirmed`,
         },
       },
       updatedCash: newCash,
@@ -847,12 +907,19 @@ export function evaluateTradingRules(
       else if (rule.cadence === "hourly") cadenceMs = 60 * 60 * 1000;
       else if (rule.cadence === "weekly") cadenceMs = 7 * 24 * 60 * 60 * 1000;
 
+      // Check maxExecutions cap
+      if (rule.maxExecutions && (rule.executionsCount || 0) >= rule.maxExecutions) {
+        updatedRules[i] = { ...rule, status: "triggered" };
+        continue;
+      }
+
+      const hasRunBefore = (rule.executionsCount || 0) > 0 || Boolean(rule.lastTriggeredAt);
       const lastRun = rule.lastTriggeredAt
         ? new Date(rule.lastTriggeredAt).getTime()
-        : (rule.executionsCount && rule.executionsCount > 0 ? new Date(rule.createdAt).getTime() : 0);
+        : 0;
 
-      // Trigger if interval elapsed OR if initial buy hasn't been executed yet (executionsCount === 0)
-      if (now - lastRun >= cadenceMs || (!rule.executionsCount || rule.executionsCount === 0)) {
+      // Trigger if interval elapsed OR if initial buy hasn't been executed yet
+      if (!hasRunBefore || (now - lastRun >= cadenceMs)) {
         if (updatedCash >= rule.amountUsd) {
           const sharesBought = Number((rule.amountUsd / currentPrice).toFixed(4));
           updatedCash = Number((updatedCash - rule.amountUsd).toFixed(2));
@@ -886,10 +953,13 @@ export function evaluateTradingRules(
             });
           }
 
+          const newExecCount = (rule.executionsCount || 0) + 1;
+          const isComplete = Boolean(rule.maxExecutions && newExecCount >= rule.maxExecutions);
           const updatedRule: TradingRule = {
             ...rule,
             lastTriggeredAt: new Date(now).toISOString(),
-            executionsCount: (rule.executionsCount || 0) + 1,
+            executionsCount: newExecCount,
+            status: isComplete ? "triggered" : rule.status,
           };
           updatedRules[i] = updatedRule;
           triggeredRules.push(updatedRule);
@@ -1020,10 +1090,11 @@ export function evaluateTradingRules(
     if (rule.type === "stop_loss") {
       const pos = updatedPositions.find((p) => p.symbol.toLowerCase() === rule.symbol.toLowerCase());
       if (pos && pos.shares > 0) {
+        const targetLoss = Math.abs(rule.triggerProfitPercent || 0);
         const lossPercent = ((pos.avgEntryPrice - currentPrice) / pos.avgEntryPrice) * 100;
         const isTriggered =
-          (rule.triggerProfitPercent !== undefined && lossPercent >= rule.triggerProfitPercent) ||
-          (rule.triggerPrice !== undefined && currentPrice <= rule.triggerPrice);
+          (targetLoss > 0 && lossPercent >= targetLoss) ||
+          (rule.triggerPrice !== undefined && rule.triggerPrice > 0 && currentPrice <= rule.triggerPrice);
 
         if (isTriggered) {
           const sellAmount = Number((pos.shares * currentPrice).toFixed(2));

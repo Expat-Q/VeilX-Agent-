@@ -26,9 +26,15 @@ export async function POST(req: Request) {
     const cookieStore = cookies();
     const sessionCookie = cookieStore.get("veilx_session")?.value;
     const sessionUser = sessionCookie ? verifySessionToken(sessionCookie) : null;
-    if (sessionUser && sessionUser.xHandle?.toLowerCase() !== cleanHandle) {
+    if (!sessionUser) {
       return NextResponse.json(
-        { error: "Unauthorized: Session does not match user handle" },
+        { error: "Unauthorized: Active authenticated session required" },
+        { status: 401 }
+      );
+    }
+    if (sessionUser.xHandle?.toLowerCase() !== cleanHandle) {
+      return NextResponse.json(
+        { error: "Forbidden: Session identity does not match user handle" },
         { status: 403 }
       );
     }

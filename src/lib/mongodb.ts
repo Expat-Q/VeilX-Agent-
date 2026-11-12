@@ -26,8 +26,21 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
     return null;
   }
 
+  // If connection is active and ready, return cached connection
   if (cached.conn && cached.conn.connection.readyState === 1) {
     return cached.conn;
+  }
+
+  // If cached connection dropped or not ready, reset cache to force reconnect
+  if (cached.conn && cached.conn.connection.readyState !== 1) {
+    cached.conn = null;
+    cached.promise = null;
+  }
+
+  // Reset promise if mongoose connection is disconnected (readyState === 0)
+  if (mongoose.connection && mongoose.connection.readyState === 0) {
+    cached.promise = null;
+    cached.conn = null;
   }
 
   if (!cached.promise) {
@@ -45,6 +58,8 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
   try {
     cached.conn = await cached.promise;
     if (cached.conn.connection.readyState !== 1) {
+      cached.promise = null;
+      cached.conn = null;
       return null;
     }
   } catch (e) {

@@ -79,7 +79,7 @@ function FormattedMessageContent({ content, isUser }: { content: string; isUser:
             <li className="leading-relaxed pl-0.5">{children}</li>
           ),
           code: ({ children, className }) => {
-            const isBlock = className?.includes("language-");
+            const isBlock = Boolean(className?.includes("language-")) || String(children).includes("\n");
             if (isBlock) {
               return (
                 <pre className="p-2.5 rounded-xl bg-[#FAF7F0] border border-[#EBE3D5] text-[#1E1315] font-mono text-[11px] overflow-x-auto my-2">

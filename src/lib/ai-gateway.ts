@@ -5,6 +5,73 @@ import { normalizeChainName, SUPPORTED_CHAINS } from "./1click";
 import { fetchMarketPrice } from "./price-service";
 import { getLiveNearPrice } from "./oracle-service";
 
+// Clean number parser helper handling commas
+export function parseCleanNumber(str?: string | null): number {
+  if (!str) return NaN;
+  const sanitized = str.replace(/,/g, "").trim();
+  return parseFloat(sanitized);
+}
+
+// Company to tokenized stock ticker dictionary
+export const COMPANY_TICKER_MAP: Record<string, string> = {
+  apple: "AAPLon",
+  aapl: "AAPLon",
+  tesla: "TSLAon",
+  tsla: "TSLAon",
+  nvidia: "NVDAon",
+  nvda: "NVDAon",
+  spy: "SPYon",
+  sp500: "SPYon",
+  microsoft: "MSFTon",
+  msft: "MSFTon",
+  amazon: "AMZNon",
+  amzn: "AMZNon",
+  google: "GOOGLon",
+  googl: "GOOGLon",
+  alphabet: "GOOGLon",
+  meta: "METAon",
+  hood: "HOODon",
+  robinhood: "HOODon",
+  coin: "COINon",
+  coinbase: "COINon",
+  near: "NEAR",
+  btc: "BTC",
+  bitcoin: "BTC",
+  eth: "ETH",
+  ethereum: "ETH",
+  sol: "SOL",
+  solana: "SOL"
+};
+
+export function normalizeStockOrCrypto(sym: string): string {
+  const clean = sym.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (COMPANY_TICKER_MAP[clean]) return COMPANY_TICKER_MAP[clean];
+  if (clean.endsWith("on")) {
+    const base = clean.slice(0, -2).toUpperCase();
+    return `${base}on`;
+  }
+  const upper = clean.toUpperCase();
+  if (["BTC", "ETH", "SOL", "NEAR", "DOGE", "USDC", "USDT"].includes(upper)) {
+    return upper;
+  }
+  return `${upper}on`;
+}
+
+// Adversarial prompt injection detector
+export function isPromptInjection(text: string): boolean {
+  return /(?:ignore|disregard|forget|bypass|override)\s+(?:all\s+)?(?:previous\s+|prior\s+)?(?:instructions|rules|guardrails|commands|prompts)|system\s*override|developer\s*mode\s*activated/i.test(text);
+}
+
+// Reserved words that must never be captured as recipient handles
+export const RESERVED_HANDLES = new Set([
+  "from", "to", "on", "via", "with", "using", "for", "in", "at", "into", "the", "my", "this",
+  "base", "near", "solana", "sol", "arbitrum", "arb", "ethereum", "eth", "optimism", "op",
+  "polygon", "pol", "bsc", "bnb", "avalanche", "avax", "bitcoin", "btc", "dogecoin", "doge",
+  "zcash", "zec", "tron", "trx", "ton", "sui", "aptos", "apt", "stellar", "xlm", "cardano", "ada",
+  "litecoin", "ltc", "berachain", "bera", "monad", "starknet", "gnosis", "xdai", "scroll", "xrp",
+  "usdc", "usdt", "usd"
+]);
+
 export interface ToolCallResult {
   tool:
     | "tip_handle"
@@ -43,20 +110,54 @@ export async function processUserMessage(
   history?: { role: string; content: string }[],
   mode: "social" | "terminal" = "social"
 ): Promise<ToolCallResult> {
-  let clean = prompt.trim();
+  if (!prompt || typeof prompt !== "string") {
+    return { tool: "unknown", args: {}, assistantReply: "Please provide a valid prompt." };
+  }
+
+  // Security Gate 1: Unbounded input clamp (DoS / ReDoS prevention)
+  let clean = prompt.slice(0, 1000).trim();
+
+  // Security Gate 2: Adversarial Prompt Injection Guard
+  if (isPromptInjection(clean)) {
+    return {
+      tool: "unknown",
+      args: {},
+      assistantReply: "Security Warning: Adversarial instruction override detected. Financial execution halted.",
+    };
+  }
+
   const isTerminal = mode === "terminal";
 
-  // Multi-Turn Context Resolution for Follow-up answers (e.g. "$0.5", "0.01 NEAR", "create a paylink")
+  // Multi-Turn Context Resolution for Follow-up answers
   if (history && history.length > 0) {
-    const isOnlyAmount = /^\$?(\d+(?:\.\d+)?)\s*(NEAR|USDC|USD)?$/i.test(clean);
-    if (isOnlyAmount) {
+    const isOnlyAmount = /^\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(NEAR|USDC|USD|ETH|SOL)?$/i.test(clean);
+    const amountVal = parseCleanNumber(clean.replace(/\$|(NEAR|USDC|USD|ETH|SOL)/gi, ""));
+    const assetSpec = clean.match(/NEAR|USDC|USD|ETH|SOL/i)?.[0]?.toUpperCase();
+
+    if (isOnlyAmount && !isNaN(amountVal) && amountVal > 0) {
       const recent = history.slice(-4).map((h) => h.content).join(" ");
+
+      // Case A: Follow-up to Invoicing / PayLink
       if (/invoice|paylink|bill/i.test(recent)) {
         const handleMatch = recent.match(/@([a-zA-Z0-9_]+)/i);
         const client = handleMatch ? handleMatch[1] : undefined;
         const memoMatch = recent.match(/\bfor\s+([a-zA-Z0-9_ -]+)$/i);
         const memo = memoMatch ? memoMatch[1].trim() : "Payment Request";
-        clean = `create invoice ${clean} ${client ? "for @" + client : ""} for ${memo}`;
+        clean = `create invoice $${amountVal} ${client ? "for @" + client : ""} for ${memo}`;
+      }
+      // Case B: Follow-up to Social Tip
+      else if (/tip|send\s+to/i.test(recent)) {
+        const handleMatch = recent.match(/@([a-zA-Z0-9_.-]+)/i);
+        if (handleMatch) {
+          clean = `tip @${handleMatch[1]} ${amountVal} ${assetSpec || "USDC"}`;
+        }
+      }
+      // Case C: Follow-up to Stock / Trading
+      else if (/buy|invest|trade/i.test(recent)) {
+        const symMatch = recent.match(/\b(TSLA|NVDA|AAPL|SPY|MSFT|AMZN|GOOGL|NEAR|BTC|ETH|SOL)(?:on)?\b/i);
+        if (symMatch) {
+          clean = `buy $${amountVal} ${symMatch[1]}`;
+        }
       }
     } else if (/^(?:create\s+(?:a\s+)?(?:paylink|invoice)|paylink|invoice)$/i.test(clean)) {
       const recent = history.slice(-4).map((h) => h.content).join(" ");
@@ -170,6 +271,30 @@ export async function processUserMessage(
     };
   }
 
+  // Pattern 0D-1: Cross-Chain Self-Directed Swaps / Bridges ("bridge 0.1 eth to arbitrum", "swap 5 NEAR to SOL", "transfer 5 usdc from near to base")
+  const selfBridgeMatch = /(?:bridge|swap|transfer)\s+\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*([a-zA-Z]+)?\s+(?:from\s+([a-zA-Z]+)\s+)?to\s+([a-zA-Z]+)/i.exec(clean);
+  if (selfBridgeMatch && !clean.includes("@") && !clean.match(/0x[a-fA-F0-9]{40}/)) {
+    const rawAmt = parseCleanNumber(selfBridgeMatch[1]);
+    const assetSpec = selfBridgeMatch[2]?.toUpperCase() || "USDC";
+    const srcChain = selfBridgeMatch[3] ? normalizeChainName(selfBridgeMatch[3]) : "NEAR";
+    const destChain = normalizeChainName(selfBridgeMatch[4]);
+    return {
+      tool: "execute_cross_chain_intent",
+      args: {
+        sourceChain: srcChain,
+        sourceAsset: assetSpec,
+        sourceAmount: rawAmt,
+        targetChain: destChain,
+        targetAsset: assetSpec,
+        targetAmount: rawAmt,
+        amount: rawAmt,
+        recipient: "self",
+        isDirectEvm: false,
+      },
+      assistantReply: `Cross-Chain Intent Formulated: Bridge ${rawAmt} ${assetSpec} from ${srcChain} to ${destChain} via Defuse 1Click Solvers.`,
+    };
+  }
+
   // Pattern 0D: Omnichain Cross-Chain Intent via NEAR Intents / Defuse 1Click Solvers (38+ Chains)
   // Handles: "Send 10 USDC on Base to @alice", "Send 0.05 SOL to @bob", "Send 0.001 BTC to @alice", "Tip 50 DOGE to @elon", "Swap 5 NEAR to SOL"
   const chainPattern = "(base|solana|arbitrum|ethereum|optimism|polygon|bsc|bnb|avalanche|avax|bitcoin|btc|dogecoin|doge|zcash|zec|tron|trx|ton|sui|aptos|apt|stellar|xlm|cardano|ada|litecoin|ltc|berachain|bera|monad|starknet|gnosis|xdai|scroll|xrp|sol|eth|arb|op|pol)";
@@ -193,11 +318,11 @@ export async function processUserMessage(
     XRP: "XRP",
   };
 
-  const crossChainIntentRegexA = new RegExp(`(?:send|tip|transfer|pay|swap)\\s+\\$?(\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)?\\s+(?:on|from)?\\s+(?:the\\s+|my\\s+)?${chainPattern}(?:\\s+(?:chain|balance|wallet))?\\s+(?:to\\s+|for\\s+)?(?:this\\s+wallet\\s+)?@?([a-zA-Z0-9_.-]+)`, "i");
-  const crossChainIntentRegexB = new RegExp(`(?:send|tip|transfer|pay|swap)\\s+\\$?(\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)?\\s+(?:to\\s+)?(?:this\\s+wallet\\s+)?@?([a-zA-Z0-9_.-]+)\\s+(?:on|from|via)\\s+(?:the\\s+|my\\s+)?${chainPattern}(?:\\s+(?:chain|balance|wallet))?`, "i");
-  const crossChainIntentRegexC = new RegExp(`(?:send|tip|transfer|pay|swap)\\s+(?:to\\s+)?(?:this\\s+wallet\\s+)?@?([a-zA-Z0-9_.-]+)\\s+\\$?(\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)?\\s+(?:on|from|via)\\s+(?:the\\s+|my\\s+)?${chainPattern}(?:\\s+(?:chain|balance|wallet))?`, "i");
+  const crossChainIntentRegexA = new RegExp(`(?:send|tip|transfer|pay|swap)\\s+\\$?(\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?|\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)?\\s+(?:on|from)?\\s+(?:the\\s+|my\\s+)?${chainPattern}(?:\\s+(?:chain|balance|wallet))?\\s+(?:to\\s+|for\\s+)?(?:this\\s+wallet\\s+)?@?([a-zA-Z0-9_.-]+)`, "i");
+  const crossChainIntentRegexB = new RegExp(`(?:send|tip|transfer|pay|swap)\\s+\\$?(\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?|\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)?\\s+(?:to\\s+)?(?:this\\s+wallet\\s+)?@?([a-zA-Z0-9_.-]+)\\s+(?:on|from|via)\\s+(?:the\\s+|my\\s+)?${chainPattern}(?:\\s+(?:chain|balance|wallet))?`, "i");
+  const crossChainIntentRegexC = new RegExp(`(?:send|tip|transfer|pay|swap)\\s+(?:to\\s+)?(?:this\\s+wallet\\s+)?@?([a-zA-Z0-9_.-]+)\\s+\\$?(\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?|\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)?\\s+(?:on|from|via)\\s+(?:the\\s+|my\\s+)?${chainPattern}(?:\\s+(?:chain|balance|wallet))?`, "i");
   // Implied native token regex (e.g. "Send 0.05 SOL to @expatq3", "Tip 10 DOGE to @jack")
-  const impliedTokenIntentRegex = new RegExp(`(?:send|tip|transfer|pay|swap)\\s+\\$?(\\d+(?:\\.\\d+)?)\\s*(SOL|BTC|DOGE|ZEC|TRX|TON|SUI|APT|XLM|ADA|LTC|BERA|MON|STRK|XRP)\\s+(?:to\\s+)?(?:this\\s+wallet\\s+)?@?([a-zA-Z0-9_.-]+)`, "i");
+  const impliedTokenIntentRegex = new RegExp(`(?:send|tip|transfer|pay|swap)\\s+\\$?(\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?|\\d+(?:\\.\\d+)?)\\s*(SOL|BTC|DOGE|ZEC|TRX|TON|SUI|APT|XLM|ADA|LTC|BERA|MON|STRK|XRP)\\s+(?:to\\s+)?(?:this\\s+wallet\\s+)?@?([a-zA-Z0-9_.-]+)`, "i");
 
   const matchIntentA = clean.match(crossChainIntentRegexA);
   const matchIntentB = clean.match(crossChainIntentRegexB);
@@ -212,22 +337,22 @@ export async function processUserMessage(
     let recipient = "veilx-agent.testnet";
 
     if (matchIntentA) {
-      rawAmount = parseFloat(matchIntentA[1]);
+      rawAmount = parseCleanNumber(matchIntentA[1]);
       asset = matchIntentA[2] ? matchIntentA[2].toUpperCase() : "USDC";
       destChain = normalizeChainName(matchIntentA[3]);
       recipient = matchIntentA[4].replace("@", "").trim();
     } else if (matchIntentB) {
-      rawAmount = parseFloat(matchIntentB[1]);
+      rawAmount = parseCleanNumber(matchIntentB[1]);
       asset = matchIntentB[2] ? matchIntentB[2].toUpperCase() : "USDC";
       recipient = matchIntentB[3].replace("@", "").trim();
       destChain = normalizeChainName(matchIntentB[4]);
     } else if (matchIntentC) {
       recipient = matchIntentC[1].replace("@", "").trim();
-      rawAmount = parseFloat(matchIntentC[2]);
+      rawAmount = parseCleanNumber(matchIntentC[2]);
       asset = matchIntentC[3] ? matchIntentC[3].toUpperCase() : "USDC";
       destChain = normalizeChainName(matchIntentC[4]);
     } else if (matchImplied) {
-      rawAmount = parseFloat(matchImplied[1]);
+      rawAmount = parseCleanNumber(matchImplied[1]);
       asset = matchImplied[2].toUpperCase();
       destChain = tokenToChainMap[asset] || "BASE";
       recipient = matchImplied[3].replace("@", "").trim();
@@ -269,11 +394,11 @@ function extractChainHint(input: string): string | undefined {
 }
 
   // Pattern 1A: Target first ("Send web3central.veilx-agent.testnet 0.05 near", "Tip @expatq3 $5", "Send bob.testnet 0.1 NEAR")
-  const tipRegexA = /(?:tip|send|transfer)\s+@?([a-zA-Z0-9_.-]+)\s+\$?(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?/i;
+  const tipRegexA = /(?:tip|send|transfer)\s+@?([a-zA-Z0-9_.-]+)\s+\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*([a-zA-Z]+)?/i;
   const matchA = clean.match(tipRegexA);
-  if (matchA) {
+  if (matchA && !RESERVED_HANDLES.has(matchA[1].replace("@", "").toLowerCase())) {
     const target = matchA[1].replace("@", "");
-    const rawAmount = parseFloat(matchA[2]);
+    const rawAmount = parseCleanNumber(matchA[2]);
     const specifiedAsset = matchA[3] || (hasDollarSign ? undefined : undefined);
 
     const val = await resolveIntentValue(rawAmount, specifiedAsset, hasDollarSign);
@@ -286,7 +411,8 @@ function extractChainHint(input: string): string | undefined {
         tool: "direct_transfer",
         args: {
           recipientAddress: target,
-          amount: val.amount,
+          amount: (hasDollarSign || !specifiedAsset) ? rawAmount : val.amount,
+          tokenAmount: val.amount,
           asset: val.asset,
           chain: chainHint || "base",
           chainId: chainHint === "arbitrum" ? 421614 : chainHint === "ethereum" ? 11155111 : 84532,
@@ -304,7 +430,8 @@ function extractChainHint(input: string): string | undefined {
       tool: "tip_handle",
       args: {
         recipientHandle: target,
-        amount: val.amount,
+        amount: (hasDollarSign || !specifiedAsset) ? rawAmount : val.amount,
+        tokenAmount: val.amount,
         asset: val.asset,
         usdEquivalent: val.usdEquivalent,
         nearEquivalent: val.nearEquivalent,
@@ -316,10 +443,10 @@ function extractChainHint(input: string): string | undefined {
   }
 
   // Pattern 1B: Amount first ("Send 0.05 NEAR to web3central.veilx-agent.testnet", "Send $5 to @expatq3", "Transfer 0.1 NEAR to bob.testnet")
-  const tipRegexB = /(?:tip|send|transfer)\s+\$?(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?\s+(?:to\s+)?@?([a-zA-Z0-9_.-]+)/i;
+  const tipRegexB = /(?:tip|send|transfer)\s+\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*([a-zA-Z]+)?\s+(?:to\s+)?@?([a-zA-Z0-9_.-]+)/i;
   const matchB = clean.match(tipRegexB);
-  if (matchB) {
-    const rawAmount = parseFloat(matchB[1]);
+  if (matchB && !RESERVED_HANDLES.has(matchB[3].replace("@", "").toLowerCase())) {
+    const rawAmount = parseCleanNumber(matchB[1]);
     const specifiedAsset = matchB[2];
     const target = matchB[3].replace("@", "");
 
@@ -333,7 +460,8 @@ function extractChainHint(input: string): string | undefined {
         tool: "direct_transfer",
         args: {
           recipientAddress: target,
-          amount: val.amount,
+          amount: (hasDollarSign || !specifiedAsset) ? rawAmount : val.amount,
+          tokenAmount: val.amount,
           asset: val.asset,
           chain: chainHint || "base",
           chainId: chainHint === "arbitrum" ? 421614 : chainHint === "ethereum" ? 11155111 : 84532,
@@ -351,7 +479,8 @@ function extractChainHint(input: string): string | undefined {
       tool: "tip_handle",
       args: {
         recipientHandle: target,
-        amount: val.amount,
+        amount: (hasDollarSign || !specifiedAsset) ? rawAmount : val.amount,
+        tokenAmount: val.amount,
         asset: val.asset,
         usdEquivalent: val.usdEquivalent,
         nearEquivalent: val.nearEquivalent,
@@ -430,18 +559,19 @@ function extractChainHint(input: string): string | undefined {
     };
   }
 
-  // Pattern 4: Explicit Check Balance ("Check my balance", "what is my balance", "how much near do I have", "view balance")
-  if (
-    /(?:^|\b)(?:check\s+balance|what\s+is\s+my\s+balance|what's\s+my\s+balance|my\s+balance|view\s+balance|show\s+balance|check\s+my\s+balance|how\s+much\s+(?:near|eth|usdc|funds|crypto|money)\s+(?:do\s+i\s+have|in\s+my\s+wallet))(?:\b|$)/i.test(clean) ||
-    /^(?:balance|my\s+balance|wallet\s+balance|evm\s+balance|near\s+balance)$/i.test(clean)
-  ) {
+  // Pattern 4: Balances & Portfolio Synonyms ("check my balance", "what's my near net worth", "show my stock holdings", "my positions", "view portfolio")
+  if (/(?:balance|net\s*worth|holdings|positions|portfolio)/i.test(clean)) {
+    if (/(?:stock\s+holdings|holdings|positions|portfolio)/i.test(clean)) {
+      return {
+        tool: "get_portfolio",
+        args: {},
+        assistantReply: "Querying your live tokenized equity holdings and active automated trading rules on NEAR...",
+      };
+    }
     const isBase = /base|evm|eth|sepolia/i.test(clean);
     return {
       tool: "check_balance",
-      args: {
-        chain: isBase ? "base" : "all",
-        query: clean,
-      },
+      args: { chain: isBase ? "base" : "all", query: clean },
       assistantReply: isBase
         ? "Querying your live Universal EVM balances (Base · Arbitrum · Ethereum) via NEAR Chain Signatures MPC..."
         : "Querying your live omnichain balances on NEAR Protocol and EVM chains...",
@@ -457,14 +587,16 @@ function extractChainHint(input: string): string | undefined {
     };
   }
 
-  // Pattern 5B: Chained Bracket Order ("Buy $50 TSLA now and take profit at +10%", "Buy $100 TSLA and take profit at +10%", "Buy $50 TSLA with 10% take profit")
+  // Pattern 5B: Chained Bracket Order ("Buy $50 TSLA now and take profit at +10%", "buy 50 TSLA and exit at +12%", "Buy $50 TSLA with 10% take profit")
   const bracketMatch =
-    /(?:buy\s+\$?([0-9.]+)\s+(?:of\s+)?([A-Za-z0-9_-]+)(?:\s+now)?\s+(?:and|with)\s+(?:take\s+profit|tp)\s+(?:at\s+)?\+?([0-9.]+)\s*%?)|(?:buy\s+(?:into\s+)?([A-Za-z0-9_-]+)\s+\$?([0-9.]+)\s+(?:and|with)\s+(?:take\s+profit|tp)\s+(?:at\s+)?\+?([0-9.]+)\s*%?)/i.exec(clean);
+    /(?:buy\s+\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s+(?:of\s+)?([A-Za-z0-9_-]+)(?:\s+now)?\s+(?:and|with)\s+(?:take\s+profit|tp|exit\s+at|target)\s+(?:at\s+)?\+?(\d+(?:\.\d+)?)\s*%?)|(?:buy\s+(?:into\s+)?([A-Za-z0-9_-]+)\s+\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s+(?:and|with)\s+(?:take\s+profit|tp|exit\s+at|target)\s+(?:at\s+)?\+?(\d+(?:\.\d+)?)\s*%?)/i.exec(clean);
   if (bracketMatch) {
-    const amountUsd = parseFloat(bracketMatch[1] || bracketMatch[5]) || 50;
-    const rawSym = (bracketMatch[2] || bracketMatch[4] || "TSLA").toUpperCase();
-    const sym = rawSym.endsWith("ON") ? rawSym : `${rawSym}on`;
-    const takeProfitPercent = parseFloat(bracketMatch[3] || bracketMatch[6]) || 10;
+    const amountUsd = parseCleanNumber(bracketMatch[1] || bracketMatch[5]);
+    if (isNaN(amountUsd) || amountUsd <= 0) {
+      return { tool: "unknown", args: {}, assistantReply: "Invalid order amount specified." };
+    }
+    const sym = normalizeStockOrCrypto(bracketMatch[2] || bracketMatch[4] || "TSLA");
+    const takeProfitPercent = parseCleanNumber(bracketMatch[3] || bracketMatch[6]) || 10;
     return {
       tool: "create_trading_rule",
       args: {
@@ -479,19 +611,22 @@ function extractChainHint(input: string): string | undefined {
     };
   }
 
-  // Pattern 5C: Dollar Cost Averaging (DCA) ("DCA $50 into TSLA every minute", "DCA $100 TSLA daily", "recurring buy $20 SPY every minute")
+  // Pattern 5C: Dollar Cost Averaging (DCA) ("DCA $50 into TSLA every minute", "dca 10 into apple every 3 days", "recurring buy $20 SPY every minute")
   const dcaMatch =
-    /(?:dca|dollar\s*cost\s*average|recurring\s*buy)\s+(?:into\s+)?\$?([0-9.]+)?\s*(?:into\s+)?([A-Za-z0-9_-]+)(?:\s+(?:every|each|daily|hourly|weekly|min|minute|1m|5m)[a-z0-9\s]*)?/i.exec(clean);
+    /(?:dca|dollar\s*cost\s*average|recurring\s*buy)\s+(?:into\s+)?\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(?:into\s+)?([A-Za-z0-9_-]+)(?:\s+(?:every|each|daily|hourly|weekly|min|minute|1m|5m)\s*([a-z0-9\s]*))?/i.exec(clean);
   if (dcaMatch && (clean.toLowerCase().includes("dca") || clean.toLowerCase().includes("recurring"))) {
-    const amountUsd = parseFloat(dcaMatch[1]) || 50;
-    const rawSym = (dcaMatch[2] || "TSLA").toUpperCase();
-    const sym = rawSym.endsWith("ON") ? rawSym : `${rawSym}on`;
+    const amountUsd = parseCleanNumber(dcaMatch[1]);
+    if (isNaN(amountUsd) || amountUsd <= 0) {
+      return { tool: "unknown", args: {}, assistantReply: "Invalid DCA amount." };
+    }
+    const sym = normalizeStockOrCrypto(dcaMatch[2]);
     let cadence: "1m" | "5m" | "hourly" | "daily" | "weekly" = "daily";
     const cl = clean.toLowerCase();
     if (cl.includes("1m") || cl.includes("minute")) cadence = "1m";
     else if (cl.includes("5m") || cl.includes("5 min")) cadence = "5m";
     else if (cl.includes("hour")) cadence = "hourly";
     else if (cl.includes("week")) cadence = "weekly";
+    else if (cl.includes("day")) cadence = "daily";
 
     const cadenceLabel =
       cadence === "1m"
@@ -518,12 +653,29 @@ function extractChainHint(input: string): string | undefined {
     };
   }
 
-  // Pattern 6: Trading Rules ("Buy $100 TSLA when it drops below $340", "Take profit on NVDA at +10%")
-  const ruleMatchA = /(?:take\s+profit\s+(?:on\s+)?([A-Za-z0-9_-]+)\s+at\s+\+?([0-9.]+)\s*%)/i.exec(clean);
+  // Pattern 6: Trading Rules ("Buy $100 TSLA when it drops below $340", "Take profit on NVDA at +10%", "Stop loss on NVDA at -5%")
+  const stopLossMatch = /(?:set\s+)?stop\s+loss\s+(?:on\s+)?([A-Za-z0-9_-]+)\s+at\s+(?:below\s+)?\$?(-?[0-9.]+)\s*(%?)/i.exec(clean);
+  if (stopLossMatch) {
+    const sym = normalizeStockOrCrypto(stopLossMatch[1]);
+    const rawVal = Math.abs(parseCleanNumber(stopLossMatch[2]));
+    const isPercent = stopLossMatch[3] === "%" || rawVal < 50;
+    return {
+      tool: "create_trading_rule",
+      args: {
+        symbol: sym,
+        type: "stop_loss",
+        targetPercent: isPercent ? rawVal : undefined,
+        targetPrice: !isPercent ? rawVal : undefined,
+        amountUsd: 100,
+      },
+      assistantReply: `Stop-Loss Rule Armed: Monitoring ${sym} to harvest position if it breaches -${rawVal}${isPercent ? "%" : " USD"}.`,
+    };
+  }
+
+  const ruleMatchA = /(?:take\s+profit\s+(?:on\s+)?([A-Za-z0-9_-]+)\s+at\s+\+?(\d+(?:\.\d+)?)\s*%)/i.exec(clean);
   if (ruleMatchA) {
-    const rawSym = ruleMatchA[1].toUpperCase();
-    const sym = rawSym.endsWith("ON") ? rawSym : `${rawSym}on`;
-    const targetPercent = parseFloat(ruleMatchA[2]) || 10;
+    const sym = normalizeStockOrCrypto(ruleMatchA[1]);
+    const targetPercent = parseCleanNumber(ruleMatchA[2]) || 10;
     return {
       tool: "create_trading_rule",
       args: {
@@ -536,12 +688,14 @@ function extractChainHint(input: string): string | undefined {
     };
   }
 
-  const ruleMatchB = /(?:buy\s+\$?([0-9.]+)\s+([A-Za-z0-9_-]+)\s+(?:when|if)\s+(?:it\s+)?(?:drops|dips)\s+below\s+\$?([0-9.]+))/i.exec(clean);
+  const ruleMatchB = /(?:buy\s+\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s+([A-Za-z0-9_-]+)\s+(?:when|if)\s+(?:it\s+)?(?:drops|dips)\s+below\s+\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?))/i.exec(clean);
   if (ruleMatchB) {
-    const amountUsd = parseFloat(ruleMatchB[1]) || 100;
-    const rawSym = ruleMatchB[2].toUpperCase();
-    const sym = rawSym.endsWith("ON") ? rawSym : `${rawSym}on`;
-    const targetPrice = parseFloat(ruleMatchB[3]) || 340;
+    const amountUsd = parseCleanNumber(ruleMatchB[1]);
+    if (isNaN(amountUsd) || amountUsd <= 0) {
+      return { tool: "unknown", args: {}, assistantReply: "Invalid order amount specified." };
+    }
+    const sym = normalizeStockOrCrypto(ruleMatchB[2]);
+    const targetPrice = parseCleanNumber(ruleMatchB[3]) || 340;
     return {
       tool: "create_trading_rule",
       args: {
@@ -554,13 +708,15 @@ function extractChainHint(input: string): string | undefined {
     };
   }
 
-  // Pattern 7: Direct Stock Trade ("Buy $50 AAPL now", "Buy $100 TSLA", "Sell $50 NVDA")
-  const tradeMatch = /(?:^(?:buy|sell|trade)\s+\$?([0-9.]+)\s+(?:of\s+)?([A-Za-z0-9_-]+)(?:\s+now)?$)/i.exec(clean);
+  // Pattern 7: Direct Stock Trade ("Buy $50 AAPL now", "Buy $1,000 TSLA", "Sell 20 of NVDAon", "buy $0 TSLA")
+  const tradeMatch = /(?:^(?:buy|sell|trade)\s+\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s+(?:of\s+)?([A-Za-z0-9_-]+)(?:\s+now)?$)/i.exec(clean);
   if (tradeMatch) {
     const isSell = /^sell/i.test(clean);
-    const amountUsd = parseFloat(tradeMatch[1]) || 50;
-    const rawSym = tradeMatch[2].toUpperCase();
-    const sym = rawSym.endsWith("ON") ? rawSym : `${rawSym}on`;
+    const amountUsd = parseCleanNumber(tradeMatch[1]);
+    if (isNaN(amountUsd) || amountUsd <= 0) {
+      return { tool: "unknown", args: {}, assistantReply: "Invalid trade amount. Amount must be greater than zero." };
+    }
+    const sym = normalizeStockOrCrypto(tradeMatch[2]);
     return {
       tool: "trade_stock",
       args: {
@@ -671,6 +827,10 @@ export const NEAR_AI_TOOLS = [
           targetChain: { type: "string", description: "Target blockchain (e.g. BASE, SOLANA, ARBITRUM, OPTIMISM, ETHEREUM)" },
           recipient: { type: "string", description: "Recipient handle or on-chain address" },
           sourceAsset: { type: "string", description: "Source asset to spend (default NEAR)" },
+          sourceChain: { type: "string", description: "Source blockchain (default NEAR)" },
+          sourceAmount: { type: "number", description: "Source amount to spend" },
+          targetAmount: { type: "number", description: "Target amount to deliver" },
+          isDirectEvm: { type: "boolean", description: "Whether direct EVM transfer" },
         },
         required: ["amount", "targetAsset", "targetChain", "recipient"],
       },
@@ -685,9 +845,11 @@ export const NEAR_AI_TOOLS = [
         type: "object",
         properties: {
           amount: { type: "number", description: "Amount requested in USD or crypto like NEAR" },
+          amountUsd: { type: "number", description: "Amount in USD equivalent" },
           asset: { type: "string", description: "Asset currency: NEAR, USDC, or USD" },
           memo: { type: "string", description: "Memo or purpose" },
           recipientHandle: { type: "string", description: "Optional client handle without @" },
+          clientHandle: { type: "string", description: "Optional client handle without @" },
         },
         required: ["amount"],
       },
@@ -771,17 +933,19 @@ export const NEAR_AI_TOOLS = [
     type: "function",
     function: {
       name: "create_trading_rule",
-      description: "Set an automated trading rule (dip buying, take-profit, stop-loss)",
+      description: "Set an automated trading rule (buy dip, take profit, stop loss, DCA recurring buy, bracket order)",
       parameters: {
         type: "object",
         properties: {
           symbol: { type: "string", description: "Stock symbol (e.g. TSLAon, NVDAon)" },
-          type: { type: "string", description: "Rule type: 'buy_dip', 'take_profit', or 'stop_loss'" },
+          type: { type: "string", enum: ["buy_dip", "take_profit", "stop_loss", "recurring_buy", "bracket_order"], description: "Rule type" },
           targetPrice: { type: "number", description: "Target trigger price in USD" },
           targetPercent: { type: "number", description: "Target percent" },
+          takeProfitPercent: { type: "number", description: "Take profit target percent for bracket orders" },
           amountUsd: { type: "number", description: "Dollar amount to allocate when triggered" },
+          cadence: { type: "string", enum: ["1m", "5m", "hourly", "daily", "weekly"], description: "Cadence for recurring buy" },
         },
-        required: ["symbol", "type"],
+        required: ["symbol", "type", "amountUsd"],
       },
     },
   },

@@ -31,6 +31,23 @@ export function TwitterClaimModal({ isOpen, onClose, onSuccess }: TwitterClaimMo
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
     if (user?.xHandle) {
       setHandle(user.xHandle);
     }
@@ -114,8 +131,14 @@ export function TwitterClaimModal({ isOpen, onClose, onSuccess }: TwitterClaimMo
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-brown-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl border border-butter-300 max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl relative">
+    <div
+      className="fixed inset-0 z-50 bg-[#1E1315]/40 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl border border-[#EBE3D5] max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-butter-200">
           <div className="flex items-center gap-2.5">

@@ -574,19 +574,9 @@ export async function POST(req: Request) {
       }
     }
 
-    // Fast-path evaluation: If message matches unambiguous cross-chain, paylink, trading, or query command, resolve immediately with sub-millisecond precision
+    // Fast-path evaluation: If message matches unambiguous core financial commands, resolve immediately with sub-millisecond precision
     const fastCheck = await processUserMessage(message, history, isTerminal ? "terminal" : "social");
-    if (
-      fastCheck.tool === "execute_cross_chain_intent" ||
-      fastCheck.tool === "pay_invoice" ||
-      fastCheck.tool === "cancel_invoice" ||
-      fastCheck.tool === "query_history" ||
-      fastCheck.tool === "faucet" ||
-      fastCheck.tool === "create_trading_rule" ||
-      fastCheck.tool === "trade_stock" ||
-      fastCheck.tool === "get_portfolio" ||
-      fastCheck.tool === "get_market_price"
-    ) {
+    if (fastCheck.tool !== "unknown") {
       return NextResponse.json({
         success: true,
         engine: "deterministic-fastpath",

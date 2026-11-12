@@ -6,6 +6,7 @@ import { Transaction } from "@/models/Transaction";
 import { sendTelegramReply } from "@/lib/telegram-bot";
 import { verifyNearTransactionOutcome } from "@/lib/near-rpc";
 import { verifySessionToken } from "@/lib/session";
+import { getLiveNearPrice } from "@/lib/oracle-service";
 
 export async function GET(req: Request) {
   try {
@@ -156,11 +157,26 @@ export async function PATCH(req: Request) {
         );
       }
 
-      const targetAccount = existing.recipientNearAccount || payerWallet || "veilx-agent.testnet";
+      // Calculate required deposit in NEAR from amountNear or existing.amountUsd converted via live price
+      let minDepositNear: number | undefined = undefined;
+      const parsedAmountNear = typeof amountNear === "number" ? amountNear : parseFloat(amountNear || "0");
+      if (!isNaN(parsedAmountNear) && parsedAmountNear > 0) {
+        minDepositNear = parsedAmountNear;
+      } else if (existing.amountUsd && existing.amountUsd > 0) {
+        try {
+          const livePrice = await getLiveNearPrice();
+          const safePrice = livePrice > 0 ? livePrice : 5.0;
+          minDepositNear = existing.amountUsd / safePrice;
+        } catch {
+          minDepositNear = existing.amountUsd / 5.0; // fallback if oracle unavailable
+        }
+      }
+
+      const targetAccount = existing.recipientNearAccount || "veilx-agent.testnet";
       const txCheck = await verifyNearTransactionOutcome(
         settledTx,
         targetAccount,
-        existing.amountUsd
+        minDepositNear
       );
 
       if (!txCheck.success) {

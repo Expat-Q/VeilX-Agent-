@@ -100,8 +100,22 @@ export function validateSpendBudget(
   amountUsd: number,
   handle?: string
 ): { allowed: boolean; isQuarantined?: boolean; error?: string; perTxMax?: number; dailyMax?: number } {
+  if (typeof amountUsd !== "number" || isNaN(amountUsd) || amountUsd <= 0) {
+    return {
+      allowed: false,
+      isQuarantined: false,
+      error: "Invalid spend amount: Amount must be a positive number greater than 0.",
+    };
+  }
+
   const session = getStoredAgentSession(handle);
-  if (!session) return { allowed: true };
+  if (!session) {
+    return {
+      allowed: false,
+      isQuarantined: false,
+      error: "Active agent session required to validate spend budget.",
+    };
+  }
 
   if (session.isFrozen) {
     return {

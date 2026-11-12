@@ -25,16 +25,23 @@ export async function POST(req: Request) {
     }
 
     // Require active authenticated session matching userHandle
+    const cookieStore = cookies();
+    const sessionCookie = cookieStore.get("veilx_session")?.value;
+    const sessionUser = sessionCookie ? verifySessionToken(sessionCookie) : null;
+
+    if (!sessionUser) {
+      return NextResponse.json(
+        { error: "Unauthorized: Active authenticated session required for withdrawal" },
+        { status: 401 }
+      );
+    }
+
     if (userHandle) {
       const cleanHandle = userHandle.replace("@", "").trim().toLowerCase();
-      const cookieStore = cookies();
-      const sessionCookie = cookieStore.get("veilx_session")?.value;
-      const sessionUser = sessionCookie ? verifySessionToken(sessionCookie) : null;
-
-      if (!sessionUser || sessionUser.xHandle?.toLowerCase() !== cleanHandle) {
+      if (sessionUser.xHandle?.toLowerCase() !== cleanHandle) {
         return NextResponse.json(
-          { error: "Unauthorized: Active session matching handle required for withdrawal" },
-          { status: 401 }
+          { error: "Forbidden: Active session does not match user handle" },
+          { status: 403 }
         );
       }
     }

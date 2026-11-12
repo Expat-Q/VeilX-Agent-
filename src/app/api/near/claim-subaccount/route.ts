@@ -168,16 +168,16 @@ export async function POST(req: NextRequest) {
     );
 
     await Transaction.create({
-      tipId,
+      userHandle: cleanHandle,
       txHash: claimTxHash,
-      type: "tip_claim",
-      senderHandle: lockedTip.senderHandle,
-      recipientHandle: cleanHandle,
-      recipientWallet: stealthSubaccountId,
-      amount: lockedTip.amount,
-      amountNear: lockedTip.amountNear,
-      asset: lockedTip.asset,
-      status: "success",
+      type: "tip_claimed",
+      counterparty: lockedTip.senderHandle ? `@${lockedTip.senderHandle}` : "VeilX Escrow",
+      amountUsd: lockedTip.amountUsd || 0,
+      asset: lockedTip.asset || "NEAR",
+      status: "claimed",
+      statusLabel: "Stealth Subaccount Claim",
+      memo: `Claimed to ${stealthSubaccountId}`,
+      isInflow: true,
     });
 
     return NextResponse.json({

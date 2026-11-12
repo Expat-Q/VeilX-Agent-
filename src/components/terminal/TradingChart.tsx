@@ -45,7 +45,7 @@ interface TradingChartProps {
   className?: string;
 }
 
-export type Timeframe = "1D" | "5D" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "ALL";
+export type Timeframe = "1H" | "1D" | "5D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "ALL";
 type ChartType = "candlestick" | "area";
 
 interface CustomPriceLine {
@@ -61,9 +61,17 @@ function generateCandles(currentPrice: number, timeframe: Timeframe): Candlestic
   let intervalSeconds = 15 * 60; // 15 mins for 1D
 
   switch (timeframe) {
+    case "1H":
+      count = 60;
+      intervalSeconds = 60; // 1 minute candles
+      break;
     case "1D":
       count = 96;
       intervalSeconds = 15 * 60;
+      break;
+    case "1W":
+      count = 168;
+      intervalSeconds = 3600; // 1 hour candles
       break;
     case "5D":
       count = 120;
@@ -99,7 +107,7 @@ function generateCandles(currentPrice: number, timeframe: Timeframe): Candlestic
   const data: CandlestickData[] = [];
 
   let runningClose = currentPrice;
-  const volatility = currentPrice * (timeframe === "1D" ? 0.003 : 0.008);
+  const volatility = currentPrice * (timeframe === "1H" ? 0.001 : timeframe === "1D" ? 0.003 : 0.008);
 
   const rawPrices: { open: number; high: number; low: number; close: number }[] = [];
   for (let i = 0; i < count; i++) {
@@ -547,7 +555,21 @@ export function TradingChart({
       seriesMarkersRef.current = null;
       priceLineHandlesRef.current = [];
     };
-  }, [asset.symbol, timeframe]);
+  }, [
+    asset.symbol,
+    asset.price,
+    timeframe,
+    chartType,
+    showVolume,
+    showSma20,
+    showSma50,
+    showEma20,
+    showBollinger,
+    priceLines.length,
+    isFullscreen,
+    renderPriceLines,
+    renderOrderMarkers,
+  ]);
 
   // Handle container resize & fullscreen toggling WITHOUT chart recreation
   useEffect(() => {
@@ -1019,7 +1041,7 @@ export function TradingChart({
         <div className="flex items-center gap-1.5 max-w-full overflow-x-auto no-scrollbar py-0.5 shrink-0">
           {/* Expanded Timeframe Horizon Buttons */}
           <div className="flex items-center bg-[#FAF7F0] border border-[#EBE3D5] rounded-xl p-0.5 shrink-0">
-            {(["1D", "5D", "1M", "3M", "6M", "YTD", "1Y", "ALL"] as Timeframe[]).map((tf) => (
+            {(["1H", "1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"] as Timeframe[]).map((tf) => (
               <button
                 key={tf}
                 type="button"

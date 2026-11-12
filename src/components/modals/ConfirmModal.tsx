@@ -26,14 +26,19 @@ export function ConfirmModal({
   variant = "warning",
   isAlert = false,
 }: ConfirmModalProps) {
-  // Close on Escape key
+  // Close on Escape key & lock body scroll
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -79,12 +84,16 @@ export function ConfirmModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#1E1315]/40 backdrop-blur-sm animate-in fade-in duration-150">
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#1E1315]/40 backdrop-blur-sm animate-in fade-in duration-150"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-sm bg-white border border-[#EBE3D5] rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 relative animate-in zoom-in-95 duration-150"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         <button

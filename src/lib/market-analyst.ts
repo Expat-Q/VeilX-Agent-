@@ -98,10 +98,11 @@ export async function evaluateMarketAndGenerateDecisions(
   const decisions: AgentDecision[] = [];
   const updatedPositions: PortfolioPosition[] = existingPositions.map((p) => {
     const live = assetMap.get(p.symbol);
-    const curPrice = live ? live.price : p.currentPrice;
+    const curPrice = live && live.price > 0 && !isNaN(live.price) ? live.price : p.currentPrice;
     const curVal = Number((p.shares * curPrice).toFixed(2));
     const pnlUsd = Number((curVal - p.shares * p.avgEntryPrice).toFixed(2));
-    const pnlPercent = Number(((pnlUsd / (p.shares * p.avgEntryPrice || 1)) * 100).toFixed(2));
+    const costBasis = p.shares * p.avgEntryPrice;
+    const pnlPercent = costBasis > 0 ? Number(((pnlUsd / costBasis) * 100).toFixed(2)) : 0;
     return {
       ...p,
       currentPrice: curPrice,
@@ -223,15 +224,17 @@ export async function evaluateMarketAndGenerateDecisions(
 
       const targetBuyAmountUsd = Math.min(roomLeft, availableSpendableCash, 35.0);
 
-      if (targetBuyAmountUsd >= 10.0) {
+      if (targetBuyAmountUsd >= 10.0 && asset.price && asset.price > 0 && !isNaN(asset.price)) {
         const sharesToBuy = Number((targetBuyAmountUsd / asset.price).toFixed(4));
         runningCash -= targetBuyAmountUsd;
 
         if (existingPos) {
           const totalShares = existingPos.shares + sharesToBuy;
-          existingPos.avgEntryPrice = Number(
-            ((existingPos.shares * existingPos.avgEntryPrice + targetBuyAmountUsd) / totalShares).toFixed(2)
-          );
+          if (totalShares > 0) {
+            existingPos.avgEntryPrice = Number(
+              ((existingPos.shares * existingPos.avgEntryPrice + targetBuyAmountUsd) / totalShares).toFixed(2)
+            );
+          }
           existingPos.shares = totalShares;
           existingPos.currentValueUsd += targetBuyAmountUsd;
         } else {

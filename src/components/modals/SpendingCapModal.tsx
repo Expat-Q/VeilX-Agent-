@@ -21,6 +21,15 @@ export function SpendingCapModal({ isOpen, onClose }: SpendingCapModalProps) {
 
   useEffect(() => {
     if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
     const session = getStoredAgentSession(user?.xHandle);
     if (session) {
       setPerTxInput((session.perTxLimitUsd ?? 15).toString());
@@ -30,7 +39,12 @@ export function SpendingCapModal({ isOpen, onClose }: SpendingCapModalProps) {
     } else {
       setDailyInput(spendingLimitUsd.toString());
     }
-  }, [isOpen, user?.xHandle, spendingLimitUsd]);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose, user?.xHandle, spendingLimitUsd]);
 
   if (!isOpen) return null;
 
@@ -79,8 +93,14 @@ export function SpendingCapModal({ isOpen, onClose }: SpendingCapModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1315]/40 backdrop-blur-sm animate-in fade-in">
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white border border-[#EBE3D5] rounded-3xl p-6 shadow-xl space-y-5 relative">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1315]/40 backdrop-blur-sm animate-in fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white border border-[#EBE3D5] rounded-3xl p-6 shadow-xl space-y-5 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#F2EBDC]">
           <div className="flex items-center gap-2.5">

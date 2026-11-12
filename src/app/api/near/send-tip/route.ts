@@ -54,9 +54,16 @@ export async function POST(req: Request) {
       const sessionCookie = cookieStore.get("veilx_session")?.value;
       const sessionUser = sessionCookie ? verifySessionToken(sessionCookie) : null;
 
-      if (sessionUser && sessionUser.xHandle?.toLowerCase() !== cleanSender) {
+      if (!sessionUser) {
         return NextResponse.json(
-          { error: "Unauthorized: Session identity does not match sender handle" },
+          { error: "Unauthorized: Active authenticated session required to send tips" },
+          { status: 401 }
+        );
+      }
+
+      if (sessionUser.xHandle?.toLowerCase() !== cleanSender) {
+        return NextResponse.json(
+          { error: "Forbidden: Session identity does not match sender handle" },
           { status: 403 }
         );
       }
@@ -88,15 +95,20 @@ export async function POST(req: Request) {
 
     // 1.5. If client already signed transaction (NEAR or EVM MPC)
     if (clientTxHash) {
-      if (!clientTxHash.startsWith("0x")) {
-        console.log(`[NEAR Tip] Processing client-side signed transaction ${clientTxHash} for ${senderWallet}...`);
-        const verifyOutcome = await verifyNearTransactionOutcome(clientTxHash, senderWallet || "veilx-agent.testnet");
-        if (!verifyOutcome.success) {
-          return NextResponse.json(
-            { error: `On-chain execution failed: ${verifyOutcome.error}` },
-            { status: 400 }
-          );
-        }
+      if (clientTxHash.startsWith("0x")) {
+        return NextResponse.json(
+          { error: "Direct EVM tx verification for NEAR Escrow is not supported via this route. Use /api/intents or /api/evm/broadcast-tx." },
+          { status: 400 }
+        );
+      }
+      console.log(`[NEAR Tip] Processing client-side signed transaction ${clientTxHash} for ${senderWallet}...`);
+      const targetRecipient = isDirect ? targetDirectAccount : (CONTRACT_ID || "veilx-agent.testnet");
+      const verifyOutcome = await verifyNearTransactionOutcome(clientTxHash, targetRecipient, requestedNum);
+      if (!verifyOutcome.success) {
+        return NextResponse.json(
+          { error: `On-chain execution failed: ${verifyOutcome.error}` },
+          { status: 400 }
+        );
       }
 
       const txHash = clientTxHash;

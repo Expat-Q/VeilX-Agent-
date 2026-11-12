@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { normalizeChainName, SUPPORTED_CHAINS } from "@/lib/1click";
 
 const ONECLICK_BASE = "https://1click.chaindefuser.com";
 
@@ -42,9 +43,14 @@ export async function POST(req: Request) {
 
     const tokens = await getTokens();
 
+    const canonicalKey = normalizeChainName(originChain);
+    const chainSlug = SUPPORTED_CHAINS[canonicalKey]?.id || originChain.toLowerCase();
+    const cleanOrigin = originChain.trim().toLowerCase();
+
     // Find origin asset
     const originAsset = tokens.find((t: any) => {
-      const matchChain = t.blockchain?.toLowerCase() === originChain.toLowerCase();
+      const tb = t.blockchain?.toLowerCase();
+      const matchChain = tb === chainSlug || tb === cleanOrigin || tb === canonicalKey.toLowerCase();
       const matchSymbol = t.symbol?.toUpperCase() === originAssetSymbol.toUpperCase();
       return matchChain && matchSymbol;
     });

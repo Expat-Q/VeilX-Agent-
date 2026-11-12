@@ -397,11 +397,15 @@ export async function getLiveQuote(params: SwapQuoteRequest, dryRun: boolean = t
     body: JSON.stringify(payload),
   });
 
+  let fellBack = false;
   // If confidential request failed with 401 Unauthorized (e.g. no auth token or expired),
   // automatically fall back to standard RFQ with Selective Disclosure attestation guarantee
   if (!res.ok && res.status === 401 && payload.confidentiality) {
     console.warn("[1Click] Confidential quote returned 401. Falling back to standard quote with client-side Selective Disclosure attestation.");
+    fellBack = true;
     delete payload.confidentiality;
+    if (payload.depositType === "CONFIDENTIAL_INTENTS") payload.depositType = "INTENTS";
+    if (payload.recipientType === "CONFIDENTIAL_INTENTS") payload.recipientType = "INTENTS";
     delete headers["Authorization"];
     res = await fetch(`${ONECLICK_BASE}/v0/quote`, {
       method: "POST",
@@ -418,7 +422,7 @@ export async function getLiveQuote(params: SwapQuoteRequest, dryRun: boolean = t
   const result = await res.json();
   if (params.confidentiality) {
     result.isConfidential = true;
-    result.shieldStatus = (res.status === 200 || res.status === 201) && params.authToken ? "ACTIVE_TEE" : "ACTIVE_SELECTIVE_DISCLOSURE";
+    result.shieldStatus = !fellBack && (res.status === 200 || res.status === 201) && params.authToken ? "ACTIVE_TEE" : "ACTIVE_SELECTIVE_DISCLOSURE";
   }
   return result;
 }

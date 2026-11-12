@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { X, Copy, Check, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -24,6 +24,23 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
   const accountId = user?.nearAccountId || "veilx-agent.testnet";
   const activeSession = getStoredAgentSession(user?.xHandle);
   const derivedEvm = useDerivedEvm(accountId);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -76,8 +93,14 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1315]/40 backdrop-blur-sm animate-in fade-in">
-      <div className="w-full max-w-sm bg-white border border-[#EBE3D5] rounded-2xl p-5 shadow-xl space-y-4 relative">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1315]/40 backdrop-blur-sm animate-in fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white border border-[#EBE3D5] rounded-2xl p-5 shadow-xl space-y-4 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-2 border-b border-[#F2EBDC]">
           <h3 className="text-sm font-semibold text-[#1E1315]">Deposit</h3>
