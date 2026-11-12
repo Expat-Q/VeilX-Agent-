@@ -17,7 +17,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // If relayer private key is available, attempt on-chain key deletion
+    // Never allow revoking keys directly from the master relayer contract itself
+    if (accountId === RELAYER_ACCOUNT_ID) {
+      return NextResponse.json(
+        { error: "Forbidden: Cannot delete admin keys from root relayer account" },
+        { status: 403 }
+      );
+    }
+
+    // If relayer private key is available, attempt on-chain key deletion for subaccounts
     if (RELAYER_PRIVATE_KEY && accountId.endsWith(`.${RELAYER_ACCOUNT_ID}`)) {
       try {
         const provider = new nearAPI.JsonRpcProvider({ url: TESTNET_RPC });

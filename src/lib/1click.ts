@@ -418,7 +418,7 @@ export async function getLiveQuote(params: SwapQuoteRequest, dryRun: boolean = t
   const result = await res.json();
   if (params.confidentiality) {
     result.isConfidential = true;
-    result.shieldStatus = res.status === 200 && params.authToken ? "ACTIVE_TEE" : "ACTIVE_SELECTIVE_DISCLOSURE";
+    result.shieldStatus = (res.status === 200 || res.status === 201) && params.authToken ? "ACTIVE_TEE" : "ACTIVE_SELECTIVE_DISCLOSURE";
   }
   return result;
 }
