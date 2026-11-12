@@ -133,6 +133,49 @@ export async function POST(req: NextRequest) {
     const signer = new nearAPI.KeyPairSigner(keyPair);
     const relayerAccount = new nearAPI.Account(CONTRACT_ID, provider, signer);
 
+    // 4.1 Proactively check if tip is already claimed on-chain
+    try {
+      const tipViewRes = await fetch(TESTNET_RPC, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: `check_tip_${tipId}`,
+          method: "query",
+          params: {
+            request_type: "call_function",
+            finality: "optimistic",
+            account_id: CONTRACT_ID,
+            method_name: "get_tip",
+            args_base64: Buffer.from(JSON.stringify({ tip_id: tipId })).toString("base64"),
+          },
+        }),
+        cache: "no-store",
+      });
+      if (tipViewRes.ok) {
+        const viewData = await tipViewRes.json();
+        if (viewData?.result?.result) {
+          const onchainRecord = JSON.parse(Buffer.from(viewData.result.result).toString("utf8"));
+          if (onchainRecord && onchainRecord.claimed) {
+            console.log(`[Relayer] Tip ${tipId} is already claimed on-chain. Reconciling database...`);
+            await EscrowTip.updateOne(
+              { tipId },
+              { $set: { status: "claimed", claimedAt: new Date() }, $unset: { claimLockedAt: 1 } }
+            );
+            return NextResponse.json({
+              success: true,
+              alreadyClaimed: true,
+              message: "This tip was already settled on-chain to your wallet.",
+              tipId,
+              recipientWallet: targetWallet,
+            });
+          }
+        }
+      }
+    } catch (checkErr) {
+      console.warn("[Relayer] Pre-claim on-chain check error:", checkErr);
+    }
+
     // 5. Call claim_tip (or claim_private_tip) on-chain with relayer paying gas (gasless for the recipient)
     let txHash: string;
     let blockHeight: string;
@@ -168,7 +211,23 @@ export async function POST(req: NextRequest) {
       }
       blockHeight = tx.transaction_outcome?.block_hash || "Confirmed";
     } catch (onchainErr: any) {
-      // Rollback atomic lock on failure so the user can retry
+      const errStr = onchainErr.message || "";
+      if (errStr.includes("already claimed") || errStr.includes("already been claimed")) {
+        console.log(`[Relayer] Contract returned already claimed. Reconciling database status for ${tipId}...`);
+        await EscrowTip.updateOne(
+          { tipId },
+          { $set: { status: "claimed", claimedAt: new Date() }, $unset: { claimLockedAt: 1 } }
+        );
+        return NextResponse.json({
+          success: true,
+          alreadyClaimed: true,
+          message: "This tip was already settled on-chain to your wallet.",
+          tipId,
+          recipientWallet: targetWallet,
+        });
+      }
+
+      // Rollback atomic lock on unexpected failure so the user can retry
       console.error("[Relayer] On-chain claim call failed, rolling back lock:", onchainErr);
       await EscrowTip.updateOne(
         { tipId, status: "claiming" },
