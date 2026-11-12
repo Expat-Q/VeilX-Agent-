@@ -10,6 +10,9 @@
     "test:1click": "node scripts/test-1click-quote.mjs",
     "test:ai": "node scripts/test-ai-tools.mjs"
   },
+  "engines": {
+    "node": ">=18.17.0 <=22.x"
+  },
   "dependencies": {
     "@types/elliptic": "^6.4.18",
     "clsx": "^2.1.1",
