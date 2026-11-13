@@ -12,7 +12,7 @@
 ## 🔗 Official Links & Resources
 * **Live Web App**: [https://veilx-agent.onrender.com/](https://veilx-agent.onrender.com/) *(or local preview: `http://localhost:3000`)*
 * **Official 𝕏 (Twitter)**: [https://x.com/VeilXapp](https://x.com/VeilXapp)
-* **Demo Video**: [Watch Demo Video (YouTube / Loom)](https://youtu.be/your_demo_video_here) *(Insert your video link here)*
+* **Demo Video**: [Watch Demo Video & Walkthrough on 𝕏](https://x.com/VeilXapp/status/2121181684192174228?a=qE1iJiQQslhldUpJuec&s=20)
 * **GitHub Repository**: [https://github.com/Expat-Q/VeilX-Agent-](https://github.com/Expat-Q/VeilX-Agent-)
 * **NEAR Testnet Escrow Contract**: [`veilx-agent.testnet`](https://testnet.nearblocks.io/address/veilx-agent.testnet)
 * **NEAR Testnet Relayer & Subaccount Factory**: [`veilxapp.veilx-agent.testnet`](https://testnet.nearblocks.io/address/veilxapp.veilx-agent.testnet)
