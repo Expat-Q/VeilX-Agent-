@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   X,
@@ -182,8 +183,14 @@ export function StockOnboardingModal({ isOpen, onClose, onCompleted }: StockOnbo
             {/* Brand Anchor & Stepper Badge */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#1E1315] text-[#FAF7F0] flex items-center justify-center font-serif font-bold text-xs shadow-xs">
-                  V
+                <div className="w-8 h-8 rounded-xl overflow-hidden border border-[#EBE3D5] shadow-xs shrink-0">
+                  <Image
+                    src="/veil.png"
+                    alt="Veil Logo"
+                    width={32}
+                    height={32}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div>
                   <div className="font-serif text-sm font-bold text-[#1E1315] leading-none">

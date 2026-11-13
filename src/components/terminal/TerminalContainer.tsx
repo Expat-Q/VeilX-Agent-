@@ -2089,7 +2089,13 @@ export function TerminalContainer() {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <Shield className="w-3.5 h-3.5 text-[#FAF7F0]" />
+                          <Image
+                            src="/veil.png"
+                            alt="Veil Agent"
+                            width={28}
+                            height={28}
+                            className="w-full h-full object-cover"
+                          />
                         )}
                       </div>
 
@@ -2320,7 +2326,13 @@ export function TerminalContainer() {
                 {isProcessing && (
                   <div className="flex gap-2.5 my-2 flex-row items-center">
                     <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 overflow-hidden text-xs font-bold shadow-2xs bg-[#1E1315] text-[#FAF7F0] border border-[#1E1315]">
-                      <Shield className="w-3.5 h-3.5 text-[#FAF7F0]" />
+                      <Image
+                        src="/veil.png"
+                        alt="Veil Agent"
+                        width={28}
+                        height={28}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div className="p-2.5 rounded-2xl rounded-tl-xs bg-white border border-[#EBE3D5] text-[#1E1315] shadow-2xs flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />

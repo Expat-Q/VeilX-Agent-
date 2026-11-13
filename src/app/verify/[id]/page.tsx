@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import { ShieldCheck, Lock, CheckCircle2, Clock, Share2, Copy, Check, ExternalLink, ArrowLeft } from "lucide-react";
 import { SelectiveDisclosureProof } from "@/lib/proof-attestation";
@@ -65,11 +66,17 @@ export default function VerifyProofPage() {
       {/* Top Navbar */}
       <header className="max-w-2xl mx-auto w-full flex items-center justify-between pb-6 border-b border-butter-200">
         <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 rounded-xl bg-shield-emerald flex items-center justify-center text-white font-extrabold shadow-subtle group-hover:scale-105 transition">
-            V
+          <div className="w-8 h-8 rounded-xl overflow-hidden border border-butter-300 shadow-subtle group-hover:scale-105 transition-transform shrink-0">
+            <Image
+              src="/veil.png"
+              alt="Veil Logo"
+              width={32}
+              height={32}
+              className="w-full h-full object-cover"
+            />
           </div>
           <span className="font-extrabold text-lg tracking-tight text-brown-900">
-            Veil<span className="text-shield-emerald">X</span>
+            Veil
           </span>
           <span className="ml-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-butter-200 text-brown-700">
             Verifier
@@ -105,7 +112,7 @@ export default function VerifyProofPage() {
               href="/"
               className="inline-block px-4 py-2 rounded-xl bg-brown-900 text-butter-100 text-xs font-bold hover:bg-brown-800 transition"
             >
-              Go to VeilX Home
+              Go to Veil Home
             </Link>
           </div>
         ) : (
@@ -236,7 +243,7 @@ export default function VerifyProofPage() {
       {/* Footer */}
       <footer className="max-w-2xl mx-auto w-full text-center text-xs text-brown-500 pt-6 border-t border-butter-200">
         <p>
-          VeilX Selective Disclosure Engine • Zero-Knowledge financial privacy for social commerce on NEAR Protocol
+          Veil Selective Disclosure Engine • Zero-Knowledge financial privacy for social commerce on NEAR Protocol
         </p>
       </footer>
     </div>

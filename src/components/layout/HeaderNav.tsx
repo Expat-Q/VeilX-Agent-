@@ -127,8 +127,15 @@ export function HeaderNav() {
         {/* Left: Brand Identity */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           <Link href="/" className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-brown-900 flex items-center justify-center text-butter-100 shadow-sm shrink-0">
-              <Shield className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-butter-100" />
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl overflow-hidden shadow-sm shrink-0 border border-butter-300 bg-brown-900">
+              <Image
+                src="/veil.png"
+                alt="Veil Logo"
+                width={36}
+                height={36}
+                className="w-full h-full object-cover"
+                priority
+              />
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-1 sm:gap-1.5 leading-none">

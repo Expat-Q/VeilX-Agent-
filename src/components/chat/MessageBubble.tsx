@@ -169,7 +169,13 @@ export function MessageBubble({
             className="w-full h-full object-cover"
           />
         ) : (
-          <span className="font-mono font-bold text-[11px] tracking-tight">VX</span>
+          <Image
+            src="/veil.png"
+            alt="Veil Agent"
+            width={32}
+            height={32}
+            className="w-full h-full object-cover"
+          />
         )}
       </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -772,8 +773,14 @@ export default function PayInvoicePage() {
         <div className="space-y-3 pb-3 border-b border-[#EBE3D5]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-[#1E1315] text-[#FDFBF7] flex items-center justify-center font-bold text-sm shadow-inner">
-                ✦
+              <div className="w-8 h-8 rounded-xl overflow-hidden border border-[#EBE3D5] shadow-xs shrink-0">
+                <Image
+                  src="/veil.png"
+                  alt="Veil Logo"
+                  width={32}
+                  height={32}
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div>
                 <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#8C7A7C] block">
@@ -886,17 +893,23 @@ export default function PayInvoicePage() {
           </div>
         ) : (
           <>
-            {/* METHOD 1: Pay with VeilX Agent (If Logged In) */}
+            {/* METHOD 1: Pay with Veil (If Logged In) */}
             {user && (
               <div className="p-4 rounded-2xl bg-[#FAF5EC] border border-[#EBE3D5] space-y-3 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-[#1E1315] text-[#FDFBF7] flex items-center justify-center font-bold text-xs">
-                      ✦
+                    <div className="w-6 h-6 rounded-lg overflow-hidden border border-[#EBE3D5] shrink-0">
+                      <Image
+                        src="/veil.png"
+                        alt="Veil Logo"
+                        width={24}
+                        height={24}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div>
                       <span className="text-xs font-bold text-[#1E1315] block">
-                        VeilX Agent 1-Click Pay
+                        Veil 1-Click Pay
                       </span>
                       <span className="text-[10px] text-[#8C7A7C] block truncate max-w-[200px]">
                         @{user.xHandle} ({user.nearAccountId})
@@ -923,7 +936,7 @@ export default function PayInvoicePage() {
                     <>
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                       <span>
-                        Pay ${invoice.amountUsd.toFixed(2)} with VeilX Agent
+                        Pay ${invoice.amountUsd.toFixed(2)} with Veil
                       </span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </>

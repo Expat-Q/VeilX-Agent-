@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -321,11 +322,18 @@ export default function OnboardingPage() {
          ========================================================================= */}
       <header className="w-full max-w-5xl mx-auto px-4 pt-10 pb-6 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 mx-auto group">
-          <div className="w-8 h-8 rounded-full bg-[#1E1315] text-[#FAF7F0] flex items-center justify-center font-serif font-bold text-xs shadow-xs">
-            VX
+          <div className="w-8 h-8 rounded-xl overflow-hidden border border-[#E5DAC6] shadow-xs group-hover:scale-105 transition-transform">
+            <Image
+              src="/veil.png"
+              alt="Veil Logo"
+              width={32}
+              height={32}
+              className="w-full h-full object-cover"
+              priority
+            />
           </div>
           <span className="font-serif text-2xl font-bold tracking-tight text-[#1E1315]">
-            VeilX
+            Veil
           </span>
         </Link>
       </header>
@@ -722,7 +730,7 @@ export default function OnboardingPage() {
 
       {/* Footer */}
       <footer className="w-full max-w-5xl mx-auto px-4 py-6 text-center text-xs text-[#8C7A6B]">
-        VeilX Protocol • Autonomous Stock &amp; Social Finance on NEAR
+        Veil • Autonomous Stock &amp; Social Finance on NEAR
       </footer>
     </div>
   );

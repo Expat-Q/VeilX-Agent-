@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useCallback } from "react";
+import Image from "next/image";
 import {
   ShieldCheck,
   KeyRound,
@@ -64,8 +65,14 @@ export function SessionOnboardingModal({
         {/* Top Header */}
         <div className="flex items-center justify-between pb-2 border-b border-butter-200">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-butter-200 border border-butter-300 flex items-center justify-center text-brown-900 font-black text-xs shadow-inner">
-              V
+            <div className="w-8 h-8 rounded-xl overflow-hidden border border-butter-300 shadow-xs shrink-0">
+              <Image
+                src="/veil.png"
+                alt="Veil Logo"
+                width={32}
+                height={32}
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
               <h3 className="text-sm font-bold text-brown-900">Welcome to Veil</h3>

@@ -989,7 +989,7 @@ export async function callNearAICloud(
     const formattedMessages = [
       {
         role: "system",
-        content: "You are VeilX Agent running in a confidential NEAR AI Cloud Hardware TEE Enclave. Parse financial intent with cryptographic precision. Output structured function calls whenever actions are requested.",
+        content: "You are Veil running in a confidential NEAR AI Cloud Hardware TEE Enclave. Parse financial intent with cryptographic precision. Output structured function calls whenever actions are requested.",
       },
       ...history
         .filter((m) => m.content && m.content.trim())

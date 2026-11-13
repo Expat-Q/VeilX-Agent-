@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import {
   Shield,
   X,
@@ -50,8 +51,14 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-[#EBE3D5]">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#1E1315] flex items-center justify-center text-[#FAF7F0] shadow-2xs">
-              <Shield className="w-5 h-5 text-[#FAF7F0]" />
+            <div className="w-9 h-9 rounded-xl overflow-hidden border border-[#EBE3D5] shadow-2xs shrink-0">
+              <Image
+                src="/veil.png"
+                alt="Veil Logo"
+                width={36}
+                height={36}
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
               <h3 className="text-sm font-bold text-[#1E1315]">

@@ -6,6 +6,11 @@ import { AuthProvider } from "@/context/AuthContext";
 export const metadata: Metadata = {
   title: "Veil — Autonomous Omnichain Finance & Tokenized Equities",
   description: "Autonomous trading copilot for tokenized equities, cross-chain PayLinks, and social finance powered by NEAR Protocol.",
+  icons: {
+    icon: "/veil.png",
+    shortcut: "/veil.png",
+    apple: "/veil.png",
+  },
 };
 
 export default function RootLayout({

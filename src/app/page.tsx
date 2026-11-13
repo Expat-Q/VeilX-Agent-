@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -150,8 +151,15 @@ export default function LandingPage() {
         {/* Left: Brand Monogram + Title */}
         <div className="flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-full bg-[#FAF3E0] border border-[#E8DCC4] flex items-center justify-center font-serif font-bold text-xs text-[#1E1315] shadow-2xs group-hover:bg-[#F2E7CD] transition-colors">
-              V
+            <div className="w-8 h-8 rounded-xl overflow-hidden border border-[#E8DCC4] shadow-2xs group-hover:scale-105 transition-transform">
+              <Image
+                src="/veil.png"
+                alt="Veil Logo"
+                width={32}
+                height={32}
+                className="w-full h-full object-cover"
+                priority
+              />
             </div>
             <span className="font-serif text-xl font-bold tracking-tight text-[#1E1315]">
               Veil
@@ -769,8 +777,14 @@ export default function LandingPage() {
             {/* Brand Info */}
             <div className="md:col-span-6 space-y-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-[#FAF3E0] border border-[#E8DCC4] flex items-center justify-center font-serif font-bold text-[10px] text-[#1E1315]">
-                  V
+                <div className="w-7 h-7 rounded-lg overflow-hidden border border-[#E8DCC4] shadow-2xs">
+                  <Image
+                    src="/veil.png"
+                    alt="Veil Logo"
+                    width={28}
+                    height={28}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <span className="font-serif text-lg font-bold text-[#1E1315]">
                   Veil
