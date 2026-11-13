@@ -133,7 +133,7 @@ export function MessageBubble({
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
   const [selectedChain, setSelectedChain] = useState<string>(
-    message.actionCard?.data?.chain || "base"
+    message.actionCard?.data?.chain || "near"
   );
 
   const handleCopy = (text: string) => {
@@ -294,11 +294,12 @@ export function MessageBubble({
                   <span className="text-[#7A6A5E] font-medium text-xs">Source Chain:</span>
                   <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-[#FAF7F0] border border-[#EBE3D5]">
                     {[
+                      { id: "near", label: "NEAR" },
                       { id: "base", label: "Base" },
                       { id: "arbitrum", label: "Arbitrum" },
                       { id: "ethereum", label: "Ethereum" },
                     ].map((c) => {
-                      const isSelected = selectedChain.toLowerCase().includes(c.id);
+                      const isSelected = selectedChain.toLowerCase() === c.id || (c.id !== "near" && selectedChain.toLowerCase().includes(c.id));
                       return (
                         <button
                           key={c.id}
@@ -308,7 +309,7 @@ export function MessageBubble({
                             if (message.actionCard?.data) {
                               message.actionCard.data.chain = c.id;
                               message.actionCard.data.chainId =
-                                c.id === "base" ? 84532 : c.id === "arbitrum" ? 421614 : 11155111;
+                                c.id === "near" ? 0 : c.id === "base" ? 84532 : c.id === "arbitrum" ? 421614 : 11155111;
                             }
                           }}
                           className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all duration-150 flex items-center gap-1.5 cursor-pointer ${

@@ -7,6 +7,7 @@ export interface ClientNearTransferParams {
   senderSecretKey: string;
   receiverId: string;
   amountNear: number | string;
+  asset?: string;
   nodeUrl?: string;
 }
 
@@ -25,13 +26,13 @@ export function getClientRpcUrl(): string {
 }
 
 /**
- * Signs and broadcasts a native NEAR transfer directly inside the user's browser.
+ * Signs and broadcasts a native NEAR or NEP-141 token transfer directly inside the user's browser.
  * The private key is held strictly in local memory and is never transmitted over HTTP.
  */
 export async function signAndBroadcastNearTransfer(
   params: ClientNearTransferParams
 ): Promise<ClientNearTransferResult> {
-  const { senderAccountId, senderSecretKey, receiverId, amountNear, nodeUrl } = params;
+  const { senderAccountId, senderSecretKey, receiverId, amountNear, asset = "NEAR", nodeUrl } = params;
   const effectiveNodeUrl = nodeUrl || getClientRpcUrl();
   const numAmount = typeof amountNear === "string" ? parseFloat(amountNear) : amountNear;
 
@@ -45,17 +46,36 @@ export async function signAndBroadcastNearTransfer(
   const signer = new nearAPI.KeyPairSigner(keyPair);
   const account = new nearAPI.Account(senderAccountId, provider, signer);
 
-  const yoctoAmount = nearAPI.nearToYocto(numAmount.toString() as any);
-
-  const outcome: any = await account.transfer({
-    receiverId: receiverId.trim().toLowerCase(),
-    amount: yoctoAmount,
-  });
-
-  const txHash =
-    outcome?.transaction?.hash ||
-    outcome?.receipts_outcome?.[0]?.id ||
-    `tx_${Date.now()}`;
+  let txHash = "";
+  if (asset.toUpperCase() === "USDC") {
+    const usdcContract = "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1";
+    const rawUnits = BigInt(Math.floor(numAmount * 1_000_000)).toString();
+    const outcome: any = await (account as any).functionCall({
+      contractId: usdcContract,
+      methodName: "ft_transfer",
+      args: {
+        receiver_id: receiverId.trim().toLowerCase(),
+        amount: rawUnits,
+        memo: "VeilX Direct USDC Transfer",
+      },
+      gas: BigInt("50000000000000"), // 50 TGas
+      deposit: BigInt("1"),           // 1 yoctoNEAR
+    });
+    txHash =
+      outcome?.transaction?.hash ||
+      outcome?.receipts_outcome?.[0]?.id ||
+      `tx_${Date.now()}`;
+  } else {
+    const yoctoAmount = nearAPI.nearToYocto(numAmount.toString() as any);
+    const outcome: any = await account.transfer({
+      receiverId: receiverId.trim().toLowerCase(),
+      amount: yoctoAmount,
+    });
+    txHash =
+      outcome?.transaction?.hash ||
+      outcome?.receipts_outcome?.[0]?.id ||
+      `tx_${Date.now()}`;
+  }
 
   return {
     success: true,

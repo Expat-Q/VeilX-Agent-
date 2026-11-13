@@ -854,10 +854,14 @@ export function ChatContainer() {
       if (activeSession?.isFrozen) {
         throw new Error("Emergency Freeze Active: All autonomous agent transactions are blocked by emergency safety controls.");
       }
-      const isEvmTransfer = Boolean(transferData.isEvmTransfer) ||
+      const selectedChain = (transferData.chain || "near").toLowerCase();
+      const isNearChain = selectedChain === "near";
+      const isEvmTransfer = !isNearChain && (
+        Boolean(transferData.isEvmTransfer) ||
         Boolean(transferData.isCrossChain) ||
         (transferData.recipientAddress && transferData.recipientAddress.startsWith("0x")) ||
-        ["USDC", "ETH", "USDT"].includes((transferData.asset || "").toUpperCase());
+        ["USDC", "ETH", "USDT"].includes((transferData.asset || "").toUpperCase())
+      );
 
       let realTxHash = "";
       let transferUsd = Number(transferData.usdEquivalent) || 0;
@@ -966,6 +970,7 @@ export function ChatContainer() {
             senderSecretKey: activeSession.secretKey,
             receiverId: transferData.recipientAddress.trim().toLowerCase(),
             amountNear: Number(transferData.amount),
+            asset: transferData.asset || "NEAR",
           });
           clientTxHash = signRes.txHash;
         } catch (e: any) {

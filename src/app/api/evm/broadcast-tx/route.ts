@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const RPC_MAP: Record<number, { chain: any; rpcUrl: string; explorer: string }> = {
   84532: { chain: baseSepolia, rpcUrl: "https://sepolia.base.org", explorer: "https://sepolia.basescan.org" },
   421614: { chain: arbitrumSepolia, rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc", explorer: "https://sepolia.arbiscan.io" },
-  11155111: { chain: sepolia, rpcUrl: "https://rpc.sepolia.org", explorer: "https://sepolia.etherscan.io" },
+  11155111: { chain: sepolia, rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com", explorer: "https://sepolia.etherscan.io" },
   8453: { chain: base, rpcUrl: "https://mainnet.base.org", explorer: "https://basescan.org" },
 };
 

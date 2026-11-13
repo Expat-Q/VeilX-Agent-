@@ -157,7 +157,7 @@ export const DEFAULT_CHAINS: Record<string, ChainConfig> = {
       decimals: 18,
       logo: `${TRUSTWALLET_BASE_URL}/ethereum/info/logo.png`,
     },
-    rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com", "https://1rpc.io/sepolia", "https://rpc.sepolia.org"],
+    rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com", "https://1rpc.io/sepolia"],
     explorerUrl: "https://sepolia.etherscan.io",
     color: "#627EEA",
     badgeLogo: `${TRUSTWALLET_BASE_URL}/ethereum/info/logo.png`,
