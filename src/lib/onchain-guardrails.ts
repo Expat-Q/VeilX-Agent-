@@ -101,7 +101,13 @@ export async function recordOnChainSpend(params: {
   const microAmount = Math.round((Number(amountUsd) || 0) * 1_000_000).toString();
 
   try {
-    const outcome: any = await (relayer as any).functionCall({
+    const callFn = typeof (relayer as any).callFunctionRaw === "function"
+      ? (relayer as any).callFunctionRaw.bind(relayer)
+      : typeof (relayer as any).functionCall === "function"
+      ? (relayer as any).functionCall.bind(relayer)
+      : (relayer as any).callFunction.bind(relayer);
+
+    const outcome: any = await callFn({
       contractId: CONTRACT_ID,
       methodName: "check_and_record_spend",
       args: {
@@ -109,6 +115,7 @@ export async function recordOnChainSpend(params: {
         amount: microAmount,
       },
       gas: BigInt("30000000000000"), // 30 TGas
+      deposit: BigInt(0),
       attachedDeposit: BigInt(0),
     });
 
@@ -152,7 +159,13 @@ export async function setOnChainGuardrails(params: {
   const perTxMicro = Math.round((params.perTxMaxUsd || (params.dailyLimitUsd * 0.5)) * 1_000_000).toString();
 
   try {
-    const outcome: any = await (relayer as any).functionCall({
+    const callFn = typeof (relayer as any).callFunctionRaw === "function"
+      ? (relayer as any).callFunctionRaw.bind(relayer)
+      : typeof (relayer as any).functionCall === "function"
+      ? (relayer as any).functionCall.bind(relayer)
+      : (relayer as any).callFunction.bind(relayer);
+
+    const outcome: any = await callFn({
       contractId: CONTRACT_ID,
       methodName: "set_guardrails",
       args: {
@@ -161,6 +174,7 @@ export async function setOnChainGuardrails(params: {
         per_tx_max: perTxMicro,
       },
       gas: BigInt("30000000000000"),
+      deposit: BigInt(0),
       attachedDeposit: BigInt(0),
     });
 

@@ -72,12 +72,21 @@ async function main() {
   // 2.5 Run state migration to initialize on-chain guardrails map
   try {
     console.log("\nExecuting contract migration to initialize on-chain guardrails...");
-    await account.functionCall({
-      contractId: CONTRACT_ID,
-      methodName: "migrate",
-      args: {},
-      gas: BigInt("30000000000000"),
-    });
+    if (typeof account.callFunction === "function") {
+      await account.callFunction({
+        contractId: CONTRACT_ID,
+        methodName: "migrate",
+        args: {},
+        gas: BigInt("30000000000000"),
+      });
+    } else if (typeof account.functionCall === "function") {
+      await account.functionCall({
+        contractId: CONTRACT_ID,
+        methodName: "migrate",
+        args: {},
+        gas: BigInt("30000000000000"),
+      });
+    }
     console.log("✓ Migration executed successfully!");
   } catch (mErr) {
     console.log("Migration notice:", mErr?.message || mErr);
