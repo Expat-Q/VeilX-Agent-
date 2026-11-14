@@ -84,11 +84,12 @@ Veil is natively built on NEAR Protocol, leveraging its advanced chain abstracti
 6. [Frictionless Social Pay & Universal PayLinks](#-frictionless-social-pay--universal-paylinks)
 7. [Protocol-Level Guardrails & HitL Quarantine](#-protocol-level-guardrails--hitl-quarantine)
 8. [External AI Agent Connectivity (MCP & OpenAPI)](#-external-ai-agent-connectivity-mcp--openapi)
-9. [Threat Model & Security Guarantees](#-threat-model--security-guarantees)
-10. [Supported Chains, Standards & Protocols](#-supported-chains-standards--protocols)
-11. [Local Reproduction & Verification](#-local-reproduction--verification)
-12. [Mainnet Transition Steps](#-mainnet-transition-steps)
-13. [License](#-license)
+9. [Production User Guide & Walkthrough](#-production-user-guide--walkthrough)
+10. [Threat Model & Security Guarantees](#-threat-model--security-guarantees)
+11. [Supported Chains, Standards & Protocols](#-supported-chains-standards--protocols)
+12. [Local Reproduction & Verification](#-local-reproduction--verification)
+13. [Mainnet Transition Steps](#-mainnet-transition-steps)
+14. [License](#-license)
 
 ---
 
@@ -314,6 +315,158 @@ Veil implements the open **Model Context Protocol (MCP)** JSON-RPC 2.0 specifica
 Allows custom ChatGPT Actions, LangChain, AutoGPT, and ElizaOS agents to query market prices, check wallet balances, generate PayLinks, and trigger guarded DCA orders directly via standard REST schemas.
 
 ---
+
+## 📘 Production User Guide & Walkthrough
+
+This step-by-step guide walks you through every core feature of Veil, from account creation and social payments to autonomous algorithmic equities DCA and emergency on-chain guardrails.
+
+---
+
+### Step 1: Account Creation & Smart Subaccount Provisioning
+1. Open the live web app: [https://veilx-agent.onrender.com/](https://veilx-agent.onrender.com/) *(or your local instance `http://localhost:3000`)*.
+2. Click **"Connect with 𝕏"** to authenticate via Twitter OAuth 2.0 PKCE.
+3. **Automated On-Chain Subaccount**:
+   * Veil automatically creates your non-custodial NEAR subaccount: `@<your_handle>.veilx-agent.testnet`.
+   * Your browser generates an Ed25519 session key client-side and registers it on NEAR via `addFunctionCallAccessKey`, restricted strictly to the Escrow and MPC contracts.
+4. **Gas Sponsorship & Token Dispenser**:
+   * If your account balance is low or empty, Veil's NEP-366 relayer automatically dispenses **+0.25 testnet NEAR** so you never encounter gas bottlenecks.
+   * You can also claim gas replenishment anytime in Chat by typing `"refill gas"` or `"faucet"`.
+
+---
+
+### Step 2: Conversational Social Payments & Tip Sweeping (`/chat`)
+1. **Send Instant Tips by 𝕏 Handle**:
+   * In the chat input, type:
+     ```text
+     Tip @expatq3 5 USDC
+     ```
+     or
+     ```text
+     Send 0.2 NEAR to @alice
+     ```
+   * Veil validates recipient handles, converts USD values, and executes the transfer via your scoped session key. If the amount is $\le \$25$, it settles instantly with zero wallet popups.
+2. **Cross-Chain Address Safety Guardrails**:
+   * If you accidentally attempt to send NEAR or NEAR USDC to a raw EVM address (`0x...`), Veil's address guardrail intercepts the command:
+     * It prevents catastrophic fund loss.
+     * It prompts you to either route via **Defuse 1Click Intent Swap** or switch your active chain to **Base / Arbitrum MPC**.
+3. **Private Stealth Tipping (Zero-Knowledge Commitments)**:
+   * To tip without revealing the recipient's Twitter handle on-chain, append `"privately"`:
+     ```text
+     Tip @bob 5 USDC privately
+     ```
+   * The contract records a 64-character SHA-256 hash (`sha256(bob + salt)`). Only the recipient possessing the preimage salt can claim the funds.
+4. **Claiming Incoming Tips (Gasless Sponsored Claims)**:
+   * When someone tips your handle before you have registered, funds wait safely in the escrow contract (`veilx-agent.testnet`).
+   * Upon logging in, an amber notification banner appears:
+     > *"You have 1 pending tip waiting in escrow! Total value: 5.00 USDC · Gasless claim sponsored by Veil."*
+   * Click **"Claim Now"** or type `"Claim my tips"`. Veil's relayer sponsors the gas fee, sweeping the funds into your personal subaccount.
+
+---
+
+### Step 3: Omnichain Invoicing & Universal PayLinks (`/pay/[slug]`)
+1. **Generate an Invoice in Seconds**:
+   * Type in Chat:
+     ```text
+     Invoice @acme $50 for Website Design
+     ```
+   * Veil mints a dynamic PayLink and returns an interactive invoice card with a direct URL: `https://veilx-agent.onrender.com/pay/website-design-50`.
+2. **Universal Multi-Chain Acceptance**:
+   * Send the PayLink to any client, freelancer, or customer.
+   * The payer can pay using **Bitcoin (BTC), Solana (SOL), Ethereum (ETH), Base (USDC), Arbitrum, or NEAR**.
+   * Defuse 1Click solver auctions clear the payment across chains in ~15–25 seconds, settling native USDC directly into your vault.
+   * Both sender and recipient receive automated on-chain receipt confirmation.
+
+---
+
+### Step 4: Autonomous Tokenized Equities & DCA Terminal (`/terminal`)
+Navigate to the **Terminal** tab to access the full-featured trading workstation:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ [ Studio ]                              [ Copilot ]                    │
+├────────────────────────────────────────────────────────────────────────┤
+│ • Binance-Style Real-Time Candlestick Chart (Pyth / Ondo feeds)       │
+│ • Technical Indicators: RSI-14, 20-Period Moving Average, S/R Levels   │
+│ • Timeframes: 15m, 1h, 4h, 1D, 1W                                      │
+│ • Holdings, Active DCA Rules, and Live Order Ledger                   │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Instant Stock Orders**:
+   * Switch to the **Copilot** tab and type:
+     ```text
+     Buy $50 TSLA now
+     ```
+     or
+     ```text
+     Sell 0.05 NVDA at market price
+     ```
+2. **Automated Dollar-Cost Averaging (DCA)**:
+   * Set up recurring algorithmic buys:
+     ```text
+     DCA $10 into TSLA daily
+     ```
+     ```text
+     DCA $25 into SPY every week
+     ```
+   * Active DCA rules monitor prices 24/7. Even if you close your tab, the autonomous engine triggers recurring purchases at designated intervals.
+3. **Limit Dip-Buys & Bracket Exit Orders**:
+   * Target strategic entries and exits:
+     ```text
+     Buy $100 NVDA when it drops below $135
+     ```
+     ```text
+     Take profit on TSLA at +12%
+     ```
+4. **Paper Sandbox vs. Mainnet MPC Execution**:
+   * First-time users are credited with a **$10,000 USD virtual paper trading vault** to stress-test algorithmic trading rules with live real-time oracle quotes at zero financial risk.
+   * Ready for real capital? Toggle the network pill in the header to broadcast threshold ECDSA swaps directly to Base or Arbitrum.
+
+---
+
+### Step 5: Managing Guardrails & Emergency Controls (`/dashboard`)
+Veil prioritizes user security through mathematical, contract-level guardrails:
+
+1. **Monitor Portfolio Net Worth & Caps**:
+   * Navigate to `/dashboard` to view your **Unified Portfolio Net Worth** (aggregated equities, USDC, and NEAR).
+   * Review your **Autonomous Daily Spending Cap** progress bar (e.g. `$10.06 / $50.00 USD (20%)`).
+2. **Configure Custom Spending Limits**:
+   * Click **"Configure Caps"** to adjust:
+     * **Daily Spending Cap** (default: $50 USD).
+     * **Weekly Spending Cap** (default: $200 USD).
+     * **Per-Transaction Quarantine Ceiling** (default: $25 USD).
+3. **The Human-in-the-Loop (HitL) Quarantine Card**:
+   * Any action exceeding $25 or pushing cumulative spending over the limit is immediately halted and rendered as an **Amber Quarantine Card** in Chat.
+   * You can inspect the transaction hash, risk rationale, and recipient before clicking **"Approve Execution"** or **"Cancel"**.
+4. **Instant Emergency Freeze (`emergency_freeze`)**:
+   * Suspect account compromise or abnormal activity? Click **"Emergency Freeze"**.
+   * An atomic transaction sets `is_frozen = true` in contract storage. All outbound transactions will immediately revert until you unfreeze.
+5. **Single-Click Session Revocation**:
+   * Open **Wallet Settings** (gear icon) and click **"Emergency Revoke Session Key"**.
+   * Veil calls `deleteKey` against the NEAR blockchain, permanently revoking the session key's authority across all chains in a single transaction.
+
+---
+
+### Step 6: Connecting External AI Agents (Claude Desktop & ChatGPT)
+Manage your Veil smart wallet directly from your favorite external desktop or web agent:
+
+1. **Claude Desktop Integration (MCP)**:
+   * Open `claude_desktop_config.json` on your computer and paste:
+     ```json
+     {
+       "mcpServers": {
+         "veil": {
+           "command": "npx",
+           "args": ["-y", "mcp-remote-bridge", "https://veilx-agent.onrender.com/api/mcp"]
+         }
+       }
+     }
+     ```
+   * Restart Claude Desktop. Claude now has native access to `veil_get_portfolio`, `veil_quote_stock`, `veil_execute_dca`, and `veil_send_tip`!
+2. **ChatGPT Custom GPTs (OpenAPI 3.0)**:
+   * In your ChatGPT Custom GPT editor, add an Action with Schema URL:
+     `https://veilx-agent.onrender.com/api/openapi.json`
+   * Your custom GPT can now query real-time stock prices, check balances, and generate PayLinks on your behalf.
 
 ---
 
