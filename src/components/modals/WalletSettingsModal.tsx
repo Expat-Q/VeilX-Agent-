@@ -42,6 +42,24 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
   const [importKeyInput, setImportKeyInput] = useState("");
   const [importMsg, setImportMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<"keys" | "mpc" | "agents" | "import">("keys");
+  const [agentApiKey, setAgentApiKey] = useState<string | null>(null);
+  const [loadingApiKey, setLoadingApiKey] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== "agents") return;
+    const cleanHandle = user?.xHandle?.replace("@", "").trim() || "guest";
+    setLoadingApiKey(true);
+    fetch(`/api/user/agent-key?handle=${encodeURIComponent(cleanHandle)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.apiKey) {
+          setAgentApiKey(d.apiKey);
+        }
+      })
+      .catch((e) => console.warn("Failed to fetch agent api key:", e))
+      .finally(() => setLoadingApiKey(false));
+  }, [isOpen, activeTab, user?.xHandle]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -74,7 +92,12 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
       mcpServers: {
         veil: {
           command: "npx",
-          args: ["-y", "mcp-remote", mcpEndpointUrl],
+          args: [
+            "-y",
+            "mcp-remote",
+            mcpEndpointUrl,
+            ...(agentApiKey ? ["--header", `Authorization: Bearer ${agentApiKey}`] : []),
+          ],
         },
       },
     },
@@ -350,6 +373,71 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
               <p className="text-[11px] text-[#7A6A5E] leading-relaxed">
                 Empower external AI agents to query your tokenized equity portfolio, execute automated DCA, send social tips, and manage conditional rules with strict on-chain guardrails.
               </p>
+            </div>
+
+            {/* Sub-Card 0: Personal Agent Key (API Key for Multi-User Identification) */}
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold text-[10px]">
+                    KEY
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-[#1E1315]">Your Personal Agent Key</span>
+                    <p className="text-[10px] text-[#7A6A5E]">Uniquely links your NEAR account &amp; wallet to ChatGPT / Claude</p>
+                  </div>
+                </div>
+
+                {agentApiKey && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(agentApiKey, "agent-key")}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-[#EBE3D5] hover:bg-[#FAF7F0] text-[#1E1315] text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                  >
+                    {copiedKey === "agent-key" ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-700" />
+                        <span className="text-emerald-700">Copied Key</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Key</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-white border border-[#EBE3D5] flex items-center justify-between gap-2 font-mono text-[11px] text-[#1E1315] select-all break-all">
+                <span>
+                  {loadingApiKey
+                    ? "Generating your personal agent key..."
+                    : showApiKey
+                    ? agentApiKey
+                    : agentApiKey
+                    ? `${agentApiKey.slice(0, 16)}••••••••••••••••${agentApiKey.slice(-6)}`
+                    : "veil_live_guest_default"}
+                </span>
+                {agentApiKey && (
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="p-1 text-[#7A6A5E] hover:text-[#1E1315] transition cursor-pointer"
+                  >
+                    {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+              </div>
+
+              <div className="text-[10px] text-[#7A6A5E] leading-relaxed space-y-1">
+                <p>
+                  <strong>How to use in ChatGPT:</strong> In the <em>Add custom MCP server</em> modal, change <strong>Authentication</strong> to <strong>API Key</strong> (or Bearer Token) and paste this key.
+                </p>
+                <p>
+                  This links your exact account (<code className="font-mono text-[#1E1315] font-semibold">{user?.nearAccountId || "your.veilx-agent.testnet"}</code>) so the assistant accesses your authentic on-chain balances, positions, and spending guardrails.
+                </p>
+              </div>
             </div>
 
             {/* Sub-Card 1: Claude Desktop (MCP JSON-RPC 2.0) */}

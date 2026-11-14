@@ -8,7 +8,11 @@ import { User } from "@/models/User";
 import { EscrowTip } from "@/models/EscrowTip";
 import { PayLink } from "@/models/PayLink";
 import { fetchMarketPrice } from "@/lib/price-service";
-import { recordOnChainSpend, setOnChainGuardrails } from "@/lib/onchain-guardrails";
+import { recordOnChainSpend, setOnChainGuardrails, fetchOnChainGuardrails } from "@/lib/onchain-guardrails";
+import { fetchNearAccount } from "@/lib/near-rpc";
+import { deriveEvmAddress } from "@/lib/near-chain-signatures";
+import { getLiveNearPrice } from "@/lib/oracle-service";
+import { ResolvedAgentUser } from "@/lib/user-keys";
 
 export interface McpToolDefinition {
   name: string;
@@ -237,17 +241,23 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
 ];
 
-export async function executeMcpTool(name: string, args: Record<string, any>) {
+export async function executeMcpTool(
+  name: string,
+  args: Record<string, any>,
+  userContext?: ResolvedAgentUser
+) {
   await connectToDatabase();
 
   switch (name) {
     case "veil_get_portfolio": {
-      const handle = (args.handle || "guest").replace("@", "").trim().toLowerCase();
+      const handle = (userContext?.isAuth && userContext.handle !== "guest" ? userContext.handle : (args.handle || "guest")).replace("@", "").trim().toLowerCase();
+      const nearAccountId = userContext?.nearAccountId || `${handle}.veilx-agent.testnet`;
+
       let portfolio = await Portfolio.findOne({ handle });
       if (!portfolio) {
         portfolio = await Portfolio.create({
           handle,
-          nearAccountId: `${handle}.veilx-agent.testnet`,
+          nearAccountId,
           cashUsd: 0.0,
           paperCashUsd: 10000.0,
           mode: "simulation",
@@ -264,6 +274,48 @@ export async function executeMcpTool(name: string, args: Record<string, any>) {
             isAutonomousEnabled: true,
           },
         });
+      }
+
+      // 1. Fetch real-time on-chain NEAR and NEP-141 USDC balances
+      let onChainNearUnits = "0.0";
+      let onChainNearUsd = 0.0;
+      let onChainUsdcUnits = "0.0";
+      let liveNearPrice = 3.70;
+
+      try {
+        liveNearPrice = await getLiveNearPrice().catch(() => 3.70);
+        const nearInfo = await fetchNearAccount(nearAccountId);
+        if (nearInfo.exists) {
+          onChainNearUnits = nearInfo.amountNear;
+          const numNear = parseFloat(nearInfo.amountNear) || 0.0;
+          onChainNearUsd = Number((numNear * liveNearPrice).toFixed(2));
+
+          if (nearInfo.tokens && Array.isArray(nearInfo.tokens)) {
+            const usdcTok = nearInfo.tokens.find((t: any) => t.symbol?.toUpperCase().includes("USDC"));
+            if (usdcTok) {
+              onChainUsdcUnits = String(usdcTok.balance || usdcTok.numericBalance || "0.0");
+            }
+          }
+        }
+      } catch (nearErr) {
+        console.warn("[veil_get_portfolio] On-chain NEAR query notice:", nearErr);
+      }
+
+      // 2. Derive universal EVM MPC address
+      let universalEvmAddress = "";
+      try {
+        const evmRes = deriveEvmAddress(nearAccountId);
+        universalEvmAddress = evmRes.checksumAddress || evmRes.evmAddress || "";
+      } catch (evmErr) {
+        console.warn("[veil_get_portfolio] EVM derivation notice:", evmErr);
+      }
+
+      // 3. Fetch on-chain guardrails state
+      let guardrailsState: any = null;
+      try {
+        guardrailsState = await fetchOnChainGuardrails(nearAccountId);
+      } catch (gErr) {
+        console.warn("[veil_get_portfolio] Guardrails query notice:", gErr);
       }
 
       let totalPositionValueUsd = 0;
@@ -290,19 +342,46 @@ export async function executeMcpTool(name: string, args: Record<string, any>) {
         })
       );
 
+      const onChainUsdcNum = parseFloat(onChainUsdcUnits) || 0.0;
+      const totalOnChainFundsUsd = Number((onChainUsdcNum + onChainNearUsd).toFixed(2));
       const cash = portfolio.mode === "mainnet" ? portfolio.cashUsd : portfolio.paperCashUsd;
-      const totalPortfolioValueUsd = Number((cash + totalPositionValueUsd).toFixed(2));
+      const unifiedNetWorthUsd = Number((totalOnChainFundsUsd + totalPositionValueUsd + cash).toFixed(2));
 
       return {
-        handle,
-        nearAccountId: portfolio.nearAccountId,
-        mode: portfolio.mode,
-        cashUsd: cash,
-        totalPortfolioValueUsd,
-        positionsCount: enrichedPositions.length,
-        positions: enrichedPositions,
-        activeRulesCount: (portfolio.rules || []).filter((r: any) => r.status === "active").length,
-        rules: portfolio.rules || [],
+        userHandle: `@${handle}`,
+        authenticationStatus: userContext?.isAuth ? "Authenticated via Personal Agent Key" : "Public View Mode",
+        wallets: {
+          nearAccountId,
+          universalEvmAddress: universalEvmAddress || "Deriving via NEAR MPC...",
+        },
+        onChainWalletBalances: {
+          nearNative: `${onChainNearUnits} NEAR ($${onChainNearUsd.toFixed(2)} USD)`,
+          circleUsdcNear: `${onChainUsdcUnits} USDC ($${onChainUsdcNum.toFixed(2)} USD)`,
+          totalOnChainWalletFundsUsd: `$${totalOnChainFundsUsd.toFixed(2)}`,
+        },
+        tokenizedEquities: {
+          activePositionsCount: enrichedPositions.length,
+          totalPositionsValueUsd: `$${totalPositionValueUsd.toFixed(2)}`,
+          positions: enrichedPositions,
+        },
+        simulationSandbox: {
+          mode: portfolio.mode,
+          virtualCapitalAvailableUsd: `$${cash.toFixed(2)}`,
+          startingGrantUsd: "$10,000.00",
+        },
+        unifiedPortfolioNetWorthUsd: `$${unifiedNetWorthUsd.toFixed(2)}`,
+        activeTradingRules: (portfolio.rules || []).filter((r: any) => r.status === "active"),
+        onChainSpendingGuardrails: guardrailsState ? {
+          dailyLimitUsd: `$${guardrailsState.dailyLimitUsd.toFixed(2)}`,
+          spentTodayUsd: `$${guardrailsState.spentTodayUsd.toFixed(2)}`,
+          weeklyLimitUsd: `$${guardrailsState.weeklyLimitUsd.toFixed(2)}`,
+          spentThisWeekUsd: `$${guardrailsState.spentThisWeekUsd.toFixed(2)}`,
+          emergencyFrozen: guardrailsState.isFrozen,
+        } : {
+          dailyLimitUsd: "$50.00",
+          weeklyLimitUsd: "$200.00",
+          emergencyFrozen: false,
+        },
         riskPolicy: portfolio.riskPolicy,
       };
     }

@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { executeMcpTool } from "@/lib/mcp-tools";
+import { resolveUserFromApiKey } from "@/lib/user-keys";
 
 export const dynamic = "force-dynamic";
 
@@ -48,8 +49,11 @@ export async function POST(
       );
     }
 
+    const authHeader = req.headers.get("authorization") || req.headers.get("x-api-key") || req.headers.get("x-veil-session");
+    const resolvedUser = await resolveUserFromApiKey(authHeader);
+
     const body = await req.json().catch(() => ({}));
-    const result = await executeMcpTool(toolName, body);
+    const result = await executeMcpTool(toolName, body, resolvedUser);
 
     return NextResponse.json({ success: true, tool: toolName, data: result }, { headers });
   } catch (err: any) {

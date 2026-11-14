@@ -14,6 +14,7 @@ export interface IUser extends Document {
   lastDailyReset?: Date;
   lastWeeklyReset?: Date;
   avatarUrl?: string;
+  agentApiKey?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +33,7 @@ const UserSchema = new Schema<IUser>(
     lastDailyReset: { type: Date, default: Date.now },
     lastWeeklyReset: { type: Date, default: Date.now },
     avatarUrl: { type: String },
+    agentApiKey: { type: String, sparse: true, index: true },
   },
   { timestamps: true, bufferCommands: false }
 );

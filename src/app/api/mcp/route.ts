@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { MCP_TOOLS, executeMcpTool } from "@/lib/mcp-tools";
+import { resolveUserFromApiKey } from "@/lib/user-keys";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,15 @@ export async function POST(req: NextRequest) {
     const isRpc = body.jsonrpc === "2.0";
     const id = body.id !== undefined ? body.id : null;
     const method = body.method;
+
+    // Extract optional Personal Agent Key / Token for multi-user distinction
+    const authHeader =
+      req.headers.get("authorization") ||
+      req.headers.get("x-api-key") ||
+      req.headers.get("x-veil-session") ||
+      body.params?._meta?.apiKey ||
+      body.params?.arguments?.apiKey;
+    const resolvedUser = await resolveUserFromApiKey(authHeader);
 
     // Handle MCP protocol methods
     if (method === "initialize") {
@@ -120,7 +130,7 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const result = await executeMcpTool(toolName, toolArgs);
+        const result = await executeMcpTool(toolName, toolArgs, resolvedUser);
         return NextResponse.json(
           {
             jsonrpc: "2.0",
@@ -163,7 +173,7 @@ export async function POST(req: NextRequest) {
     const directArgs = body.args || body.arguments || (toolFromQuery ? body : {});
     if (directToolName) {
       try {
-        const result = await executeMcpTool(directToolName, directArgs);
+        const result = await executeMcpTool(directToolName, directArgs, resolvedUser);
         return NextResponse.json(
           isRpc
             ? {
