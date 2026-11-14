@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { HeaderNav } from "@/components/layout/HeaderNav";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { AuthProvider } from "@/context/AuthContext";
+import { OAuthStatusModal } from "@/components/modals/OAuthStatusModal";
 
 export const metadata: Metadata = {
   title: "Veil — Autonomous Omnichain Finance & Tokenized Equities",
@@ -23,7 +25,9 @@ export default function RootLayout({
       <body className="min-h-screen bg-butter-100 text-brown-900 flex flex-col antialiased selection:bg-butter-300 overflow-x-hidden max-w-full">
         <AuthProvider>
           <HeaderNav />
+          <OAuthStatusModal />
           <main className="flex-1 flex flex-col">{children}</main>
+          <BottomNav />
         </AuthProvider>
       </body>
     </html>

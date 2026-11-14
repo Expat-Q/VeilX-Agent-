@@ -11,6 +11,7 @@ import {
   saveAgentSession,
   validateSpendBudget as libValidate,
 } from "@/lib/near-embedded-wallet";
+import { fetchOnChainGuardrails } from "@/lib/onchain-guardrails";
 
 export interface BudgetState {
   perTxLimitUsd: number;
@@ -49,6 +50,37 @@ export function validateBudgetGuardrail(
   handle?: string
 ): { allowed: boolean; error?: string } {
   return libValidate(amountUsd, handle);
+}
+
+/**
+ * Fetches the definitive on-chain guardrail state from NEAR Protocol and updates local session cache.
+ */
+export async function syncBudgetFromOnChain(handle?: string): Promise<BudgetState | null> {
+  const clean = (handle || "").replace("@", "").trim().toLowerCase();
+  if (!clean) return null;
+  const nearAccount = `${clean}.veilx-agent.testnet`;
+  const onChain = await fetchOnChainGuardrails(nearAccount);
+  if (!onChain) return null;
+
+  const session = getStoredAgentSession(clean);
+  if (session) {
+    session.dailyLimitUsd = onChain.dailyLimitUsd;
+    session.weeklyLimitUsd = onChain.weeklyLimitUsd;
+    session.perTxLimitUsd = onChain.perTxMaxUsd;
+    session.spentUsd = onChain.spentTodayUsd;
+    session.weeklySpentUsd = onChain.spentThisWeekUsd;
+    session.isFrozen = onChain.isFrozen;
+    saveAgentSession(session, clean);
+  }
+
+  return {
+    perTxLimitUsd: onChain.perTxMaxUsd,
+    dailyLimitUsd: onChain.dailyLimitUsd,
+    weeklyLimitUsd: onChain.weeklyLimitUsd,
+    spentUsd: onChain.spentTodayUsd,
+    weeklySpentUsd: onChain.spentThisWeekUsd,
+    isFrozen: onChain.isFrozen,
+  };
 }
 
 // Atomically record an outflow spend across LocalStorage, in-memory state, and MongoDB

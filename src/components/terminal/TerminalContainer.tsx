@@ -1968,7 +1968,7 @@ export function TerminalContainer() {
             {/* Left Stage: Live Chart & Order Ledger Tabs (Adjustable width on Desktop) */}
             <div
               style={{ flex: `0 0 ${chartWidthPercent}%`, maxWidth: `${chartWidthPercent}%` }}
-              className={`flex-col gap-3 min-h-0 overflow-y-auto pr-0.5 ${
+              className={`flex-col gap-3 min-h-0 overflow-y-auto pr-0.5 pb-20 md:pb-4 ${
                 mobileView === "chart" ? "flex !max-w-full !flex-1" : "hidden lg:flex"
               }`}
             >
@@ -2347,7 +2347,7 @@ export function TerminalContainer() {
               </div>
 
               {/* Chat Input & Suggestion Pills */}
-              <div className="pt-2 shrink-0 space-y-2 border-t border-[#EBE3D5]/80 mt-1">
+              <div className="pt-2 shrink-0 space-y-2 border-t border-[#EBE3D5]/80 mt-1 pb-16 md:pb-2">
                 {/* Suggestions with subtle right edge fade */}
                 <div className="relative">
                   <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 text-xs no-scrollbar pr-6">

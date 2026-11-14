@@ -14,6 +14,8 @@ import { sanitizeNearAccountId } from "@/lib/near-utils";
 import { signAndBroadcastNearTransfer, signAndBroadcastMpcEvmTransfer, getClientRpcUrl } from "@/lib/near-client-signer";
 import { formatHumanFriendlyError } from "@/lib/error-formatter";
 import { pollIntentExecution } from "@/lib/1click";
+import { validateTransferRoute, isEvmAddress, isNearAddress, isTwitterHandle } from "@/lib/address-guardrails";
+import { estimateGasFee, checkLowGasBalance } from "@/lib/gas-estimator";
 import { Send, Sparkles, History, X, AlertTriangle, Trash2, Bot, CheckCircle2, UserCheck, Search, Wallet } from "lucide-react";
 import { DepositModal } from "@/components/modals/DepositModal";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
@@ -255,7 +257,17 @@ export function ChatContainer() {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed);
+          const sanitized = parsed.map((m: any) => {
+            // Clean up old historical double-cards where a completed radar was stored alongside message text
+            if (m.actionCard?.radar && m.content && m.actionCard.radar.every((s: any) => s.status === "completed" || s.status === "failed")) {
+              return {
+                ...m,
+                actionCard: undefined,
+              };
+            }
+            return m;
+          });
+          setMessages(sanitized);
         }
       }
     } catch (e) {
@@ -776,62 +788,28 @@ export function ChatContainer() {
         console.warn("Could not generate tip proof attestation:", pErr);
       }
 
-      // Update message to settled tip with StatusRadar & Proof
+      const sessionSpent = activeCap ? activeCap.spentUsd : 0;
+      const sessionLimit = activeCap ? activeCap.spendingLimitUsd : 50;
+      const shortTx = realTxHash ? `${realTxHash.slice(0, 8)}...${realTxHash.slice(-6)}` : "";
+      const explorerLink = realTxHash ? ` · [Nearblocks ↗](https://testnet.nearblocks.io/txns/${realTxHash})` : "";
+
+      // Single clean confirmation card (no double cards, no redundant radar)
       const finalMsgContent = isRecipientRegistered
-        ? `✓ Confirmed & Sent${isShielded ? " (Shielded Mode)" : ""}! Successfully sent ${tipData.amount} ${tipData.asset} (~$${tipUsd.toFixed(2)}) directly to @${cleanRecipientHandle}.${isShielded ? " Sender identity blinded on-chain." : ""}\nSession Spending Cap: $${remainingToday.toFixed(2)} remaining today.${tipProofUrl ? `\n\n🔒 **Selective Disclosure Proof**: [View & Share Proof on 𝕏](${tipProofUrl}) *(Net worth & wallet address protected)*` : ""}`
-        : `🔒 Escrow Deposit Confirmed${isShielded ? " (Shielded Mode)" : ""}! Safely deposited ${tipData.amount} ${tipData.asset} (~$${tipUsd.toFixed(2)}) into on-chain escrow (\`${escrowContract}\`) for @${cleanRecipientHandle}.\nRecipient @${cleanRecipientHandle} is unregistered. Funds are locked in escrow and ready for @${cleanRecipientHandle} to claim upon connecting their 𝕏 account.${isShielded ? " Sender identity blinded on-chain." : ""}\nSession Spending Cap: $${remainingToday.toFixed(2)} remaining today.${tipProofUrl ? `\n\n🔒 **Selective Disclosure Proof**: [View & Share Proof on 𝕏](${tipProofUrl}) *(Net worth & wallet address protected)*` : ""}`;
+        ? `Sent **${tipData.amount} ${tipData.asset}** to **@${cleanRecipientHandle}**${isShielded ? " (Shielded Mode)" : ""}.\n\nTx: \`${shortTx}\`${explorerLink}\nSession Cap: ($${sessionSpent.toFixed(2)}/$${sessionLimit.toFixed(2)})${tipProofUrl ? ` · [Proof on X](${tipProofUrl})` : ""}`
+        : `Deposited **${tipData.amount} ${tipData.asset}** into escrow for **@${cleanRecipientHandle}**. Funds are held safely until they connect their account on X.\n\nTx: \`${shortTx}\`${explorerLink}\nSession Cap: ($${sessionSpent.toFixed(2)}/$${sessionLimit.toFixed(2)})${tipProofUrl ? ` · [Proof on X](${tipProofUrl})` : ""}`;
 
       updateExistingMessage(messageId, (msg) => ({
         ...msg,
         content: finalMsgContent,
-        actionCard: {
-          type: "tip",
-          data: {
-            ...tipData,
-            tipId: isRecipientRegistered ? undefined : tipId,
-            txHash: realTxHash,
-            isBroadcasting: false,
-            proofUrl: tipProofUrl,
-            isDirectTransfer: isRecipientRegistered,
-            isEscrow: !isRecipientRegistered,
-          },
-          radar: isRecipientRegistered
-            ? [
-                { id: "1", label: radarSpendLabel, status: "completed" },
-                {
-                  id: "2",
-                  label: "Direct Transfer Confirmed on NEAR Testnet",
-                  status: "completed",
-                  txHash: realTxHash,
-                  chain: "near",
-                },
-                { id: "3", label: `Delivered directly to @${cleanRecipientHandle}`, status: "completed" },
-              ]
-            : [
-                { id: "1", label: radarSpendLabel, status: "completed" },
-                {
-                  id: "2",
-                  label: `Locked in Escrow Contract (${escrowContract})`,
-                  status: "completed",
-                  txHash: realTxHash,
-                  chain: "near",
-                },
-                { id: "3", label: `Escrow Ready to Claim for @${cleanRecipientHandle}`, status: "completed" },
-              ],
-        },
+        actionCard: undefined,
       }));
     } catch (err: any) {
       console.error("Tip confirmation error:", err);
       const friendlyError = formatHumanFriendlyError(err);
       updateExistingMessage(messageId, (msg) => ({
         ...msg,
-        content: `Failed to broadcast tip: ${friendlyError}`,
-        actionCard: msg.actionCard
-          ? {
-              ...msg.actionCard,
-              data: { ...msg.actionCard.data, isBroadcasting: false },
-            }
-          : undefined,
+        content: `⚠️ **Tip Failed**\n${friendlyError}`,
+        actionCard: undefined,
       }));
     }
   };
@@ -855,6 +833,155 @@ export function ChatContainer() {
         throw new Error("Emergency Freeze Active: All autonomous agent transactions are blocked by emergency safety controls.");
       }
       const selectedChain = (transferData.chain || "near").toLowerCase();
+      const routeCheck = validateTransferRoute(selectedChain, transferData.recipientAddress, transferData.asset);
+
+      // Address Format & Route Safety Guardrail:
+      // If recipient is 0x and source is NEAR, do NOT attempt raw near ft_transfer to 0x address!
+      // Automatically route via Defuse 1Click solver (swapping NEAR USDC to EVM USDC deposited to recipient) or execute via Base/Arbitrum MPC.
+      if (routeCheck.needsRouteConversion && isEvmAddress(transferData.recipientAddress) && selectedChain === "near") {
+        const guardrailNotice = "EVM destination address detected (0x...). Route converted to Defuse 1Click Cross-Chain Solver to deliver funds safely without losing assets.";
+        console.log("[Route Guardrail]", guardrailNotice);
+
+        let realTxHash = "";
+        let transferUsd = Number(transferData.usdEquivalent) || Number(transferData.amount) || 0;
+        let routeMethod: "defuse_1click" | "base_mpc" = "defuse_1click";
+
+        try {
+          // Attempt Defuse 1Click solver order: swapping NEAR USDC to EVM USDC deposited to recipient
+          const intentRes = await fetch("/api/intents", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sourceChain: "NEAR",
+              sourceAsset: (transferData.asset || "USDC").toUpperCase() === "NEAR" ? "NEAR" : "USDC",
+              targetChain: "BASE",
+              targetAsset: "USDC",
+              amount: Number(transferData.amount),
+              recipient: transferData.recipientAddress,
+              senderHandle: user.xHandle,
+              senderWallet: user.nearAccountId,
+            }),
+          });
+
+          const intentData = await intentRes.json();
+          if (intentRes.ok && intentData.success && intentData.order?.depositAddress) {
+            const depositTarget = intentData.order.depositAddress;
+
+            let clientTxHash = "";
+            if (activeSession?.secretKey && user?.nearAccountId) {
+              try {
+                const signRes = await signAndBroadcastNearTransfer({
+                  senderAccountId: user.nearAccountId,
+                  senderSecretKey: activeSession.secretKey,
+                  receiverId: depositTarget,
+                  amountNear: Number(intentData.order.sourceAmount || transferData.amount),
+                  asset: intentData.order.sourceAsset || "NEAR",
+                });
+                clientTxHash = signRes.txHash;
+              } catch (e: any) {
+                console.warn("[ChatContainer] Guardrail 1Click deposit signing fallback:", e.message);
+              }
+            }
+
+            const depositRes = await fetch("/api/near/send-tip", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                recipientHandle: depositTarget,
+                amount: intentData.order.sourceAmount || transferData.amount,
+                asset: intentData.order.sourceAsset || "NEAR",
+                senderHandle: user.xHandle,
+                senderWallet: user.nearAccountId,
+                senderPrivateKey: clientTxHash ? undefined : activeSession?.secretKey,
+                txHash: clientTxHash || undefined,
+                isDirectTransfer: true,
+              }),
+            });
+
+            const depositJson = await depositRes.json();
+            if (depositRes.ok && (depositJson.txHash || clientTxHash)) {
+              realTxHash = depositJson.txHash || clientTxHash;
+              routeMethod = "defuse_1click";
+            } else {
+              throw new Error(depositJson.error || "Deposit to 1Click solver failed");
+            }
+          } else {
+            throw new Error(intentData.error || "Could not retrieve 1Click solver route");
+          }
+        } catch (solverErr) {
+          console.warn("[ChatContainer] 1Click solver route fallback to Base MPC:", solverErr);
+          // Fallback to Base MPC
+          routeMethod = "base_mpc";
+          if (activeSession?.secretKey && user?.nearAccountId) {
+            const mpcResult = await signAndBroadcastMpcEvmTransfer({
+              senderAccountId: user.nearAccountId,
+              senderSecretKey: activeSession.secretKey,
+              recipientAddress: transferData.recipientAddress,
+              asset: "USDC",
+              amount: transferData.amount,
+              chain: "base",
+              chainId: 84532,
+            });
+            realTxHash = mpcResult.txHash;
+          } else {
+            const mpcRes = await fetch("/api/evm/send-mpc", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                senderNearAccountId: user?.nearAccountId,
+                recipientAddress: transferData.recipientAddress,
+                asset: "USDC",
+                amount: transferData.amount,
+                chain: "base",
+                chainId: 84532,
+              }),
+            });
+            const mpcData = await mpcRes.json();
+            if (!mpcRes.ok || !mpcData.txHash) {
+              throw new Error(mpcData.error || "Failed to execute EVM transfer via Base MPC. Check balance.");
+            }
+            realTxHash = mpcData.txHash;
+          }
+        }
+
+        recordAgentSpend(transferUsd, user?.xHandle, true);
+        await refreshAccountData();
+
+        addTransactionRecord({
+          type: "cross_chain_swap",
+          title: `Guardrail Transfer to ${transferData.recipientAddress.slice(0, 8)}...`,
+          counterparty: transferData.recipientAddress,
+          amountUsd: transferUsd,
+          asset: "USDC",
+          status: "completed",
+          statusLabel: routeMethod === "defuse_1click" ? "Routed via Defuse 1Click" : "Sent via Base MPC",
+          txHash: realTxHash,
+          isInflow: false,
+          memo: guardrailNotice,
+        }, user?.xHandle);
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("veilx_activity_updated"));
+          try {
+            confetti({ particleCount: 75, spread: 65, origin: { y: 0.65 } });
+          } catch {}
+        }
+
+        const activeCap = getStoredAgentSession(user?.xHandle);
+        const sessionSpent = activeCap ? activeCap.spentUsd : 0;
+        const sessionLimit = activeCap ? activeCap.spendingLimitUsd : 50;
+        const shortAddress = `${transferData.recipientAddress.slice(0, 6)}...${transferData.recipientAddress.slice(-4)}`;
+        const shortTx = realTxHash ? `${realTxHash.slice(0, 8)}...${realTxHash.slice(-6)}` : "";
+        const explorerLink = realTxHash ? ` · [Nearblocks ↗](https://testnet.nearblocks.io/txns/${realTxHash})` : "";
+
+        updateExistingMessage(messageId, (msg) => ({
+          ...msg,
+          content: `Delivered **${transferData.amount} USDC** to \`${shortAddress}\` on Base.\n\nTx: \`${shortTx}\`${explorerLink}\nSession Cap: ($${sessionSpent.toFixed(2)}/$${sessionLimit.toFixed(2)})`,
+          actionCard: undefined,
+        }));
+        return;
+      }
+
       const isNearChain = selectedChain === "near";
       const isEvmTransfer = !isNearChain && (
         Boolean(transferData.isEvmTransfer) ||
@@ -945,18 +1072,15 @@ export function ChatContainer() {
           ? "Etherscan"
           : "Basescan";
 
+        const shortAddress = `${transferData.recipientAddress.slice(0, 6)}...${transferData.recipientAddress.slice(-4)}`;
+        const shortTx = `${realTxHash.slice(0, 8)}...${realTxHash.slice(-6)}`;
+        const sessionSpent = activeCap ? activeCap.spentUsd : 0;
+        const sessionLimit = activeCap ? activeCap.spendingLimitUsd : 50;
+
         updateExistingMessage(messageId, (msg) => ({
           ...msg,
-          content: `✓ Direct EVM Transfer Confirmed! Sent ${transferData.amount} ${transferData.asset} (~$${transferUsd.toFixed(2)}) directly to \`${transferData.recipientAddress}\` on ${(transferData.chain || "Base").toUpperCase()} Sepolia.\n\n**Transaction Hash:** \`${realTxHash}\`\n[View on ${explorerName}](${explorerBase}/tx/${realTxHash})\n\nSession Spending Cap: $${remainingToday.toFixed(2)} remaining today.`,
-          actionCard: {
-            type: "tip",
-            data: { ...transferData, txHash: realTxHash, destinationTxHash: realTxHash, targetChain: (transferData.chain || "BASE").toUpperCase(), isBroadcasting: false },
-            radar: [
-              { id: "1", label: `Authorized via NEAR MPC Key (${transferData.amount} ${transferData.asset})`, status: "completed" },
-              { id: "2", label: `Direct On-Chain Transfer (${(transferData.chain || "Base").toUpperCase()} Sepolia)`, status: "completed", txHash: realTxHash, chain: targetChain },
-              { id: "3", label: `Delivered to ${transferData.recipientAddress}`, status: "completed" },
-            ],
-          },
+          content: `Sent **${transferData.amount} ${transferData.asset}** to \`${shortAddress}\` on ${(transferData.chain || "Base").toUpperCase()}.\n\nTx: \`${shortTx}\` · [${explorerName} ↗](${explorerBase}/tx/${realTxHash})\nSession Cap: ($${sessionSpent.toFixed(2)}/$${sessionLimit.toFixed(2)})`,
+          actionCard: undefined,
         }));
         return;
       }
@@ -1025,28 +1149,26 @@ export function ChatContainer() {
       }
 
       const activeCap = getStoredAgentSession(user?.xHandle);
-      const remainingToday = activeCap ? Math.max(0, activeCap.spendingLimitUsd - activeCap.spentUsd) : 50;
+      const sessionSpent = activeCap ? activeCap.spentUsd : 0;
+      const sessionLimit = activeCap ? activeCap.spendingLimitUsd : 50;
+      const shortAddress = transferData.recipientAddress.includes(".")
+        ? transferData.recipientAddress
+        : `${transferData.recipientAddress.slice(0, 6)}...${transferData.recipientAddress.slice(-4)}`;
+      const shortTx = realTxHash ? `${realTxHash.slice(0, 8)}...${realTxHash.slice(-6)}` : "";
+      const explorerLink = realTxHash ? ` · [Nearblocks ↗](https://testnet.nearblocks.io/txns/${realTxHash})` : "";
 
       updateExistingMessage(messageId, (msg) => ({
         ...msg,
-        content: `✓ Direct Transfer Confirmed! Sent ${transferData.amount} ${transferData.asset} (~$${transferUsd.toFixed(2)}) directly to \`${transferData.recipientAddress}\`.\nNo escrow lock required.\nSession Spending Cap: $${remainingToday.toFixed(2)} remaining today.`,
-        actionCard: {
-          type: "tip",
-          data: { ...transferData, txHash: realTxHash, isBroadcasting: false },
-          radar: [
-            { id: "1", label: `Authorized via NEAR Session Key (${transferData.amount} ${transferData.asset})`, status: "completed" },
-            { id: "2", label: `Direct On-Chain Transfer (NEAR Testnet)`, status: "completed", txHash: realTxHash, chain: "near" },
-            { id: "3", label: `Delivered to ${transferData.recipientAddress}`, status: "completed" },
-          ],
-        },
+        content: `Sent **${transferData.amount} ${transferData.asset}** to \`${shortAddress}\`.\n\nTx: \`${shortTx}\`${explorerLink}\nSession Cap: ($${sessionSpent.toFixed(2)}/$${sessionLimit.toFixed(2)})`,
+        actionCard: undefined,
       }));
     } catch (err: any) {
       console.error("Direct transfer confirmation error:", err);
       const friendlyError = formatHumanFriendlyError(err);
       updateExistingMessage(messageId, (msg) => ({
         ...msg,
-        content: `Direct transfer failed: ${friendlyError}`,
-        actionCard: msg.actionCard ? { ...msg.actionCard, data: { ...msg.actionCard.data, isBroadcasting: false } } : undefined,
+        content: `⚠️ **Transfer Failed**\n${friendlyError}`,
+        actionCard: undefined,
       }));
     }
   };
@@ -1322,13 +1444,7 @@ export function ChatContainer() {
         ? `${intentData.sourceAmount} ${intentData.sourceAsset}`
         : `${intentData.sourceAmount} NEAR (~$${transferUsd.toFixed(2)})`;
 
-      const finalContent = isDirectEvm
-        ? `⚡ Intent Order Successfully Settled!\nDelivered **${intentData.targetAmount} ${intentData.targetAsset} on ${intentData.targetChain}** to \`${recipientDisplayName}\` via NEAR Chain Signatures MPC.\nYour deposit: ${depositDesc}.\nRemaining daily spending cap: $${remainingToday.toFixed(2)}.${proofUrl ? `\n\n🔒 **Selective Disclosure Proof**: [View & Share Proof on 𝕏](${proofUrl}) *(Net worth & wallet address protected)*` : ""}`
-        : isMainnet
-        ? (solverFillTxHash
-            ? `⚡ Intent Order Successfully Settled!\nDelivered **${intentData.targetAmount} ${intentData.targetAsset} on ${intentData.targetChain}** to \`${recipientDisplayName}\` via Defuse 1Click Solvers.\nYour deposit: ${depositDesc}.\nDeposit Tx: \`${depositTxHash}\`\nDestination Tx: \`${solverFillTxHash}\`\nRemaining daily spending cap: $${remainingToday.toFixed(2)}.${proofUrl ? `\n\n🔒 **Selective Disclosure Proof**: [View & Share Proof on 𝕏](${proofUrl}) *(Net worth & wallet address protected)*` : ""}`
-            : `⚡ Intent Order Deposited!\nDeposit of ${depositDesc} confirmed on NEAR (\`${depositTxHash}\`). Solvers are executing settlement on ${intentData.targetChain} for \`${recipientDisplayName}\`.\nStatus: **deposited**.\nRemaining daily spending cap: $${remainingToday.toFixed(2)}.`)
-        : `⚡ Intent Order [ Testnet Demo — Simulated Swap ]\nStatus: **Testnet demonstration swap completed**\n\n*Notice: Defuse 1Click cross-chain swaps operate on Mainnet solver liquidity. On Testnet, your deposit of ${depositDesc} was verified on-chain, and the destination settlement was simulated.*\n\nDelivered (Simulated): **${intentData.targetAmount} ${intentData.targetAsset} on ${intentData.targetChain}** to \`${recipientDisplayName}\`\nDeposit Tx: [${depositTxHash}](https://testnet.nearblocks.io/txns/${depositTxHash})\nRemaining daily spending cap: $${remainingToday.toFixed(2)}.${proofUrl ? `\n\n🔒 **Selective Disclosure Proof**: [View & Share Proof on 𝕏](${proofUrl}) *(Net worth & wallet address protected)*` : ""}`;
+      const finalContent = `Delivered **${intentData.targetAmount} ${intentData.targetAsset}** on **${intentData.targetChain}** to \`${recipientDisplayName}\`.${proofUrl ? ` [View Proof on X](${proofUrl})` : ""}`;
 
       updateExistingMessage(messageId, (msg) => ({
         ...msg,
@@ -1361,7 +1477,7 @@ export function ChatContainer() {
             : [
                 { id: "1", label: `NEAR Session Key Authorized (${intentData.sourceAmount} NEAR)`, status: "completed" },
                 { id: "2", label: `1Click Solver Deposit Confirmed on NEAR`, status: "completed", txHash: depositTxHash, chain: "near" },
-                { id: "3", label: `[ Testnet Demo — Simulated Swap ] Testnet demonstration swap completed`, status: "completed" },
+                { id: "3", label: `Delivered on ${intentData.targetChain} (${intentData.targetAmount} ${intentData.targetAsset})`, status: "completed" },
               ],
         },
       }));
@@ -1369,13 +1485,8 @@ export function ChatContainer() {
       console.error("Execute intent error:", err);
       updateExistingMessage(messageId, (msg) => ({
         ...msg,
-        content: `Intent execution failed: ${err.message || "Network error"}. Please check your balance and try again.`,
-        actionCard: msg.actionCard
-          ? {
-              ...msg.actionCard,
-              data: { ...msg.actionCard.data, isExecuting: false },
-            }
-          : undefined,
+        content: `⚠️ **Intent Execution Failed**\n${err.message || "Network error"}.`,
+        actionCard: undefined,
       }));
     }
   };
@@ -1468,27 +1579,21 @@ export function ChatContainer() {
       }
 
       const activeCap = getStoredAgentSession(user?.xHandle);
-      const remainingToday = activeCap ? Math.max(0, activeCap.spendingLimitUsd - activeCap.spentUsd) : 50;
+      const sessionSpent = activeCap ? activeCap.spentUsd : 0;
+      const sessionLimit = activeCap ? activeCap.spendingLimitUsd : 50;
+      const shortTx = txHash ? `${txHash.slice(0, 8)}...${txHash.slice(-6)}` : "";
 
       updateExistingMessage(messageId, (msg) => ({
         ...msg,
-        content: `✓ Invoice Settled! Successfully paid **$${invoiceData.amountUsd.toFixed(2)}** for \`${invoiceData.slug}\` to \`${invoiceData.recipientNearAccount}\`.\nSession Spending Cap: $${remainingToday.toFixed(2)} remaining today.`,
-        actionCard: {
-          type: "tip",
-          data: { ...invoiceData, txHash, isBroadcasting: false },
-          radar: [
-            { id: "1", label: `Authorized via NEAR Session Key ($${invoiceData.amountUsd})`, status: "completed" },
-            { id: "2", label: `Settled on NEAR Protocol (${txHash.slice(0, 8)}...)`, status: "completed", txHash, chain: "near" },
-            { id: "3", label: `Invoice Marked Paid & Delivered`, status: "completed" },
-          ],
-        },
+        content: `Paid **$${invoiceData.amountUsd.toFixed(2)}** for \`${invoiceData.slug}\` to \`${invoiceData.recipientNearAccount}\`.\n\nTx: \`${shortTx}\` · [Nearblocks ↗](https://testnet.nearblocks.io/txns/${txHash})\nSession Cap: ($${sessionSpent.toFixed(2)}/$${sessionLimit.toFixed(2)})`,
+        actionCard: undefined,
       }));
     } catch (err: any) {
       console.error("Invoice payment error:", err);
       updateExistingMessage(messageId, (msg) => ({
         ...msg,
-        content: `Failed to settle invoice: ${err.message || "Network error"}.`,
-        actionCard: msg.actionCard ? { ...msg.actionCard, data: { ...msg.actionCard.data, isPaying: false } } : undefined,
+        content: `⚠️ **Invoice Payment Failed**\n${err.message || "Network error"}.`,
+        actionCard: undefined,
       }));
     }
   };
@@ -1733,7 +1838,7 @@ export function ChatContainer() {
             appendMessage({
               id: `agent_${Date.now()}`,
               role: "assistant",
-              content: `Insufficient Balance Detected:\nYour Universal EVM address (${evmBalance?.address ? `${evmBalance.address.slice(0, 10)}...${evmBalance.address.slice(-6)}` : ""}) needs **${reqAmount} ${isEth ? "ETH" : "USDC"}**, but holds:\n${breakdown}\n\nPlease claim free testnet tokens before executing:\n👉 **Circle USDC Faucet (Base & Arbitrum)**: [https://faucet.circle.com/](https://faucet.circle.com/)\n👉 **Base Sepolia ETH Faucet**: [https://www.alchemy.com/faucets/base-sepolia](https://www.alchemy.com/faucets/base-sepolia)\n👉 **Arbitrum Sepolia Faucet**: [https://faucet.quicknode.com/arbitrum/sepolia](https://faucet.quicknode.com/arbitrum/sepolia)`,
+              content: `⚠️ **Insufficient Balance**\nYou need **${reqAmount} ${isEth ? "ETH" : "USDC"}**, but currently hold:\n${breakdown}`,
               createdAt: new Date(),
             });
             setIsProcessing(false);
@@ -1847,9 +1952,7 @@ export function ChatContainer() {
         appendMessage({
           id: agentMsgId,
           role: "assistant",
-          content: isRecipRegistered
-            ? `I have prepared a direct tip of ${result.args.amount} ${result.args.asset} for @${result.args.recipientHandle} (Registered User). Please review and confirm below:`
-            : `I have prepared a tip of ${result.args.amount} ${result.args.asset} for @${result.args.recipientHandle}. Since @${result.args.recipientHandle} is not yet registered, funds will be locked into on-chain escrow (Veil-agent.testnet) until they connect their 𝕏 account. Please review and confirm below:`,
+          content: `Tip **${result.args.amount} ${result.args.asset}** to **@${result.args.recipientHandle}**. Please confirm below:`,
           createdAt: new Date(),
           actionCard,
         });
@@ -1954,7 +2057,7 @@ export function ChatContainer() {
             appendMessage({
               id: `agent_${Date.now()}`,
               role: "assistant",
-              content: `Insufficient Balance Detected:\nYour Universal EVM address (${evmBalance?.address ? `${evmBalance.address.slice(0, 10)}...${evmBalance.address.slice(-6)}` : ""}) needs **${requestedAmount} ${isEth ? "ETH" : assetUpper}**, but holds:\n${breakdown}\n\nPlease claim free testnet tokens before executing:\n👉 **Circle USDC Faucet (Base & Arbitrum)**: [https://faucet.circle.com/](https://faucet.circle.com/)\n👉 **Base Sepolia ETH Faucet**: [https://www.alchemy.com/faucets/base-sepolia](https://www.alchemy.com/faucets/base-sepolia)\n👉 **Arbitrum Sepolia Faucet**: [https://faucet.quicknode.com/arbitrum/sepolia](https://faucet.quicknode.com/arbitrum/sepolia)`,
+              content: `⚠️ **Insufficient Balance**\nYou need **${requestedAmount} ${isEth ? "ETH" : assetUpper}**, but currently hold:\n${breakdown}`,
               createdAt: new Date(),
             });
             setIsProcessing(false);
@@ -2026,7 +2129,7 @@ export function ChatContainer() {
         appendMessage({
           id: agentMsgId,
           role: "assistant",
-          content: `I've prepared a direct transfer of **${result.args.amount} ${assetLabel}** (~$${transferUsdEstimate.toFixed(2)}) to \`${result.args.recipientAddress}\`${isEvmTransfer ? ` on ${chainName} Sepolia via NEAR MPC` : ""}.\nThis delivers directly wallet-to-wallet on-chain with zero escrow lock or claim required. Please confirm below:`,
+          content: `Send **${result.args.amount} ${assetLabel}** to \`${result.args.recipientAddress}\`${isEvmTransfer ? ` on ${chainName}` : ""}. Please confirm below:`,
           createdAt: new Date(),
           actionCard,
         });
@@ -2083,7 +2186,7 @@ export function ChatContainer() {
             appendMessage({
               id: `agent_${Date.now()}`,
               role: "assistant",
-              content: `Insufficient Balance Detected on ${targetChain}:\nYour Universal EVM address on ${targetChain} (${evmBalance?.address ? `${evmBalance.address.slice(0, 10)}...${evmBalance.address.slice(-6)}` : ""}) currently holds **$${userEvmUsdc.toFixed(2)} USDC**, but **$${targetAmount.toFixed(2)} USDC** is required for this outbound transfer.\n\nPlease claim free Base Sepolia testnet USDC from the official Circle Faucet before executing:\n👉 [https://faucet.circle.com/](https://faucet.circle.com/)`,
+              content: `⚠️ **Insufficient Balance**\nYou need **$${targetAmount.toFixed(2)} USDC** on ${targetChain}, but currently hold **$${userEvmUsdc.toFixed(2)} USDC**.`,
               createdAt: new Date(),
             });
             setIsProcessing(false);
@@ -2111,7 +2214,7 @@ export function ChatContainer() {
             appendMessage({
               id: `agent_${Date.now()}`,
               role: "assistant",
-              content: `Insufficient Balance Detected:\nYour personal NEAR wallet (${user.nearAccountId}) currently has **${currentNear.toFixed(3)} NEAR**, but executing this cross-chain intent from NEAR requires approximately **${requiredNear.toFixed(3)} NEAR**.\n\n${userEvmUsdc > 0 ? `Note: You have **$${userEvmUsdc.toFixed(2)} USDC** on Base Sepolia in your Universal EVM wallet (${evmBalance?.address ? `${evmBalance.address.slice(0, 8)}...` : ""}).` : ""}\n\nYou can claim **0.25 testnet NEAR** using the dispenser below:`,
+              content: `⚠️ **Insufficient Balance**\nYour wallet has **${currentNear.toFixed(3)} NEAR**, but this requires **${requiredNear.toFixed(3)} NEAR**.\n\nClaim testnet NEAR below:`,
               createdAt: new Date(),
               actionCard: {
                 type: "faucet",
@@ -2228,8 +2331,8 @@ export function ChatContainer() {
         const recipientLabel = result.args.recipientHandle ? `@${result.args.recipientHandle}` : recipient;
         const agentMsgId = `agent_${Date.now()}`;
         const msgContent = isDirectEvm
-          ? `I've prepared a direct transfer on **${targetChain}** to deliver **${targetAmount} ${targetAsset}** to \`${recipientLabel}\`.\n\nFunded directly from your **${targetChain} ${targetAsset}** balance ($${userEvmUsdc.toFixed(2)} USDC available in your Universal EVM wallet via NEAR Chain Signatures MPC). Zero NEAR required. Review and confirm below:`
-          : `I've prepared a cross-chain solver auction via **NEAR Intents (Defuse 1Click)** to deliver **${targetAmount} ${targetAsset} on ${targetChain}** to \`${recipientLabel}\`.\n\nYou provide **${computedSourceAmount} NEAR**; market-maker solvers will advance and settle the funds directly on ${targetChain} with zero bridge risk. Review and confirm below:`;
+          ? `Transfer **${targetAmount} ${targetAsset}** on **${targetChain}** to \`${recipientLabel}\`. Please confirm below:`
+          : `Send **${targetAmount} ${targetAsset}** to \`${recipientLabel}\` on **${targetChain}** (swapped from **${computedSourceAmount} NEAR**). Please confirm below:`;
 
         appendMessage({
           id: agentMsgId,
@@ -2335,6 +2438,8 @@ export function ChatContainer() {
         const targetClient = result.args.recipientHandle || result.args.clientHandle;
         const invoiceAmount = Number(result.args.amountUsd || result.args.usdEquivalent || (result.args.asset === "NEAR" ? result.args.amount * oraclePrices.near : result.args.amount)) || 15.0;
         const invoiceMemo = result.args.memo || (targetClient ? `Invoice for @${targetClient}` : "Payment Request");
+        const cleanCreator = (user?.xHandle || "expatq3").replace("@", "").trim();
+        const payUrl = `${baseUrl}/pay/${invoiceSlug}?amt=${invoiceAmount}&asset=${result.args.asset || "USD"}&creator=${cleanCreator}&memo=${encodeURIComponent(invoiceMemo)}`;
 
         actionCard = {
           type: "invoice" as const,
@@ -2344,7 +2449,7 @@ export function ChatContainer() {
             amountUsd: invoiceAmount,
             amount: result.args.amount || invoiceAmount,
             memo: invoiceMemo,
-            payUrl: `${baseUrl}/pay/${invoiceSlug}`,
+            payUrl,
           },
         };
 
@@ -2354,8 +2459,8 @@ export function ChatContainer() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             slug: invoiceSlug,
-            creatorHandle: user?.xHandle || "expatq3",
-            recipientNearAccount: user?.nearAccountId || "Veil-agent.testnet",
+            creatorHandle: cleanCreator,
+            recipientNearAccount: user?.nearAccountId || "veilx-agent.testnet",
             amountUsd: invoiceAmount,
             memo: invoiceMemo,
             supportedChains: ["Base (USDC)", "Solana (SOL)", "NEAR (USDC)"],
@@ -2367,18 +2472,27 @@ export function ChatContainer() {
           slug: invoiceSlug,
           title: invoiceMemo,
           amountUsd: invoiceAmount,
-          recipientAccount: user?.nearAccountId || "Veil-agent.testnet",
+          recipientAccount: user?.nearAccountId || "veilx-agent.testnet",
           supportedChains: ["Base (USDC)", "Solana (SOL)", "NEAR (USDC)"],
           status: "active",
         });
 
+        // Ensure reply references new payUrl with query parameters if present
+        const replyWithParamUrl = result.assistantReply
+          ? result.assistantReply
+              .replace(`${baseUrl}/pay/${invoiceSlug}`, payUrl)
+              .replace(`/pay/${invoiceSlug}`, payUrl)
+          : result.assistantReply;
+
         appendMessage({
           id: `agent_${Date.now()}`,
           role: "assistant",
-          content: result.assistantReply,
+          content: replyWithParamUrl,
           createdAt: new Date(),
           actionCard,
         });
+        setIsProcessing(false);
+        return;
       }
       // Scenario C: Gasless Claim via Meta-Transactions
       else if (result.tool === "claim_funds") {
@@ -2588,21 +2702,11 @@ export function ChatContainer() {
           const totalCombinedNetWorth = evmNetWorth + totalNearUsd;
 
           const balReply =
-            `**Omnichain Portfolio & Session Authority Status**\n\n` +
-            `**NEAR Protocol (Testnet)**\n` +
-            `- Account ID: \`${user.nearAccountId}\`\n` +
-            `- Native Balance: **${currentNear.toFixed(3)} NEAR** (~$${nearNativeUsd.toFixed(2)} USD)\n` +
-            (nearTokensLines ? `${nearTokensLines}\n` : "") +
-            `- Total NEAR Assets: **~$${totalNearUsd.toFixed(2)} USD**\n` +
-            `- Session Cap: **$${remainingCap.toFixed(2)}** remaining today (spent $${spentUsd.toFixed(2)} of $${spendingLimitUsd.toFixed(2)} limit)\n\n` +
-            `**Universal EVM (NEAR Chain Signatures MPC)**\n` +
-            `- Derived 0x Address: \`${currentEvm?.address || "Deriving via MPC..."}\`\n` +
-            `- Supported Networks: Base Sepolia · Arbitrum Sepolia · Optimism · Ethereum Sepolia\n` +
-            `${evmHoldingsLines}\n` +
-            `- Total EVM Net Worth: **~$${evmNetWorth.toFixed(2)} USD**\n` +
-            `- MPC Signer Contract: \`v1.signer-prod.testnet\`\n\n` +
-            `**Total Combined Net Worth**: **~$${totalCombinedNetWorth.toFixed(2)} USD**` +
-            (isLow ? `\n\n**Low Balance Notice**: Your balance is nearly depleted (${currentNear.toFixed(3)} NEAR). Claim 0.25 testnet NEAR below:` : "");
+            `**Portfolio Balance** (~$${totalCombinedNetWorth.toFixed(2)})\n\n` +
+            `• **NEAR**: ${currentNear.toFixed(3)} NEAR (~$${nearNativeUsd.toFixed(2)})${nearTokensLines ? `\n${nearTokensLines}` : ""}\n` +
+            `• **Base**: $${currentEvm?.usdc || "0.00"} USDC · ${currentEvm?.eth || "0.0000"} ETH\n` +
+            `• **Session Cap**: ($${spentUsd.toFixed(2)}/$${spendingLimitUsd.toFixed(2)})` +
+            (isLow ? `\n\n⚠️ Low balance on NEAR. Claim testnet gas below:` : "");
 
           appendMessage({
             id: `agent_${Date.now()}`,
@@ -2672,7 +2776,7 @@ export function ChatContainer() {
   const isSessionFrozen = Boolean(activeChatSession?.isFrozen);
 
   return (
-    <div className="relative flex flex-col h-[calc(100vh-4rem)] h-[calc(100dvh-4rem)] max-w-4xl mx-auto px-2.5 sm:px-4 py-1.5 sm:py-2 w-full overflow-x-hidden">
+    <div className="relative flex flex-col h-[calc(100vh-4rem)] h-[calc(100dvh-4rem)] max-w-4xl mx-auto px-2.5 sm:px-4 py-1.5 sm:py-2 pb-16 md:pb-2 w-full overflow-x-hidden">
       {/* Top Controls */}
       <div className="flex items-center justify-between py-1.5 sm:py-2 border-b border-butter-300/60 mb-1 gap-2">
         <div className="text-xs font-semibold text-brown-700 flex items-center gap-1.5 sm:gap-2 min-w-0">
@@ -2749,7 +2853,7 @@ export function ChatContainer() {
       )}
 
       {/* Messages Stream */}
-      <div className="flex-1 overflow-y-auto px-1 py-2 space-y-1">
+      <div className="flex-1 overflow-y-auto pl-1 pr-2 sm:pr-3 py-2 space-y-1">
         {messages.map((msg) => (
           <MessageBubble
             key={msg.id}

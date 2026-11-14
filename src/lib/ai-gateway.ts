@@ -422,7 +422,7 @@ function extractChainHint(input: string): string | undefined {
           conversionExplanation: val.conversionExplanation,
           isCrossChain: isCrossChainAddress(target),
         },
-        assistantReply: `Prepared direct transfer of ${val.amount} ${val.asset} directly to ${target} (${val.conversionExplanation}). Source chain: ${chainLabel} (switchable below). No escrow claim required.`,
+        assistantReply: `Send ${val.amount} ${val.asset} to ${target}. Please confirm below:`,
       };
     }
 
@@ -438,7 +438,7 @@ function extractChainHint(input: string): string | undefined {
         nearPriceUsd: val.nearPriceUsd,
         conversionExplanation: val.conversionExplanation,
       },
-      assistantReply: `Prepared tip of ${val.amount} ${val.asset} for @${target} (${val.conversionExplanation}). Executing via your delegated NEAR session key...`,
+      assistantReply: `Tip ${val.amount} ${val.asset} to @${target}. Please confirm below:`,
     };
   }
 
@@ -471,7 +471,7 @@ function extractChainHint(input: string): string | undefined {
           conversionExplanation: val.conversionExplanation,
           isCrossChain: isCrossChainAddress(target),
         },
-        assistantReply: `Prepared direct transfer of ${val.amount} ${val.asset} directly to ${target} (${val.conversionExplanation}). Source chain: ${chainLabel} (switchable below). No escrow claim required.`,
+        assistantReply: `Send ${val.amount} ${val.asset} to ${target}. Please confirm below:`,
       };
     }
 
@@ -487,7 +487,7 @@ function extractChainHint(input: string): string | undefined {
         nearPriceUsd: val.nearPriceUsd,
         conversionExplanation: val.conversionExplanation,
       },
-      assistantReply: `Prepared tip of ${val.amount} ${val.asset} for @${target} (${val.conversionExplanation}). Executing via your delegated NEAR session key...`,
+      assistantReply: `Tip ${val.amount} ${val.asset} to @${target}. Please confirm below:`,
     };
   }
 

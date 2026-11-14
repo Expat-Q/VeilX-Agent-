@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import {
   ShieldCheck,
@@ -168,19 +168,53 @@ const EVM_CHAINS_CONFIG: Record<
   },
 };
 
-export default function PayInvoicePage() {
+function PayInvoiceContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const slug = (params?.slug as string) || "inv_sample";
 
-  const [invoice, setInvoice] = useState<InvoiceData | null>(null);
+  // URL searchParams immediate hydration fallback so the page NEVER displays $0.00 while loading or if DB query lags
+  const paramAmtRaw = searchParams?.get("amt") || searchParams?.get("usd") || searchParams?.get("amount");
+  const paramAmt = paramAmtRaw ? parseFloat(paramAmtRaw.replace(/[^0-9.]/g, "")) : null;
+  const paramAsset = searchParams?.get("asset") || null;
+  const paramCreator = searchParams?.get("creator") || null;
+  const paramMemo = searchParams?.get("memo") || null;
+
+  const initialFallbackInvoice: InvoiceData | null =
+    paramAmt && paramAmt > 0
+      ? {
+          id: slug,
+          slug: slug,
+          creatorHandle: paramCreator ? paramCreator.replace("@", "").trim() : "expatq3",
+          recipientNearAccount: "veilx-agent.testnet",
+          amountUsd: paramAmt,
+          description: paramMemo ? decodeURIComponent(paramMemo) : "Payment Request",
+        }
+      : null;
+
+  const [invoice, setInvoice] = useState<InvoiceData | null>(initialFallbackInvoice);
   const [invoiceNotFound, setInvoiceNotFound] = useState(false);
-  const [isLoadingInvoice, setIsLoadingInvoice] = useState(true);
+  const [isLoadingInvoice, setIsLoadingInvoice] = useState(!initialFallbackInvoice);
   const [nearPrice, setNearPrice] = useState<number>(3.50);
 
   const { user, nearBalance, refreshAccountData, spendingLimitUsd, spentUsd } = useAuth();
   const [viewMode, setViewMode] = useState<"wallet" | "qr">("wallet");
-  const [selectedChain, setSelectedChain] = useState<string>("base");
-  const [selectedAsset, setSelectedAsset] = useState<string>("ETH");
+  const [selectedChain, setSelectedChain] = useState<string>(() => {
+    if (paramAsset) {
+      const up = paramAsset.toUpperCase();
+      if (up === "NEAR") return "near";
+      if (up === "SOL") return "solana";
+      if (up === "BTC" || up === "CBBTC") return "base";
+    }
+    return "base";
+  });
+  const [selectedAsset, setSelectedAsset] = useState<string>(() => {
+    if (paramAsset) {
+      const up = paramAsset.toUpperCase();
+      if (["USDC", "ETH", "NEAR", "SOL", "USDT", "BTC"].includes(up)) return up;
+    }
+    return "USDC";
+  });
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
 
   const [quoteSecondsLeft, setQuoteSecondsLeft] = useState<number>(60);
@@ -192,6 +226,62 @@ export default function PayInvoicePage() {
   const [isPaying, setIsPaying] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
+
+  // Omnichain solver route request via Defuse 1Click Solvers
+  const handleFetchSolverQuote = async (chain: string, asset?: string, customInvoice?: InvoiceData) => {
+    const activeInv = customInvoice || invoice;
+    if (!activeInv || !activeInv.amountUsd || activeInv.amountUsd <= 0) return;
+    setIsQuoting(true);
+    setQuoteError(null);
+
+    const c = chain.toUpperCase();
+    let assetSymbol = asset ? asset.toUpperCase() : "USDC";
+    if (!asset) {
+      if (c === "SOLANA" || c === "SOL") assetSymbol = "SOL";
+      else if (c === "BITCOIN" || c === "BTC") assetSymbol = "BTC";
+      else if (c === "ETHEREUM" || c === "ETH") assetSymbol = "ETH";
+      else if (c === "BASE") assetSymbol = "ETH";
+      else if (c === "ARBITRUM") assetSymbol = "ETH";
+      else if (c === "NEAR") assetSymbol = "NEAR";
+    }
+
+    try {
+      const res = await fetch("/api/intents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceChain: c,
+          sourceAsset: assetSymbol,
+          targetChain: "NEAR",
+          targetAsset: "NEAR",
+          amount: activeInv.amountUsd,
+          recipient: activeInv.recipientNearAccount,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.order) {
+        throw new Error(data.error || "Failed to retrieve solver quote");
+      }
+
+      setQuoteDetails({
+        depositAddress: data.order.depositAddress,
+        originChain: data.order.sourceChain,
+        originAssetSymbol: data.order.sourceAsset,
+        amountInFormatted: data.order.sourceAmount.toString(),
+        amountInUsd: activeInv.amountUsd.toFixed(2),
+        timeEstimateSeconds: data.order.timeEstimateSeconds || 25,
+        deadline: new Date(data.order.expiresAt).toLocaleTimeString(),
+      });
+      setQuoteSecondsLeft(60);
+      setDepositStatus("PENDING_DEPOSIT");
+    } catch (err: any) {
+      console.error("Quote error:", err);
+      setQuoteError(err.message || "Failed to obtain solver quote. Please try again.");
+    } finally {
+      setIsQuoting(false);
+    }
+  };
 
   // Detected Browser Wallet State
   const [detectedWallet, setDetectedWallet] = useState<{
@@ -250,31 +340,53 @@ export default function PayInvoicePage() {
       .catch(() => {});
   }, []);
 
+  // Immediate quote fetching if initialFallbackInvoice is available from searchParams
+  useEffect(() => {
+    if (initialFallbackInvoice && selectedChain !== "near") {
+      handleFetchSolverQuote(selectedChain, selectedAsset, initialFallbackInvoice);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 1. Fetch real invoice data from MongoDB Atlas
   useEffect(() => {
-    setIsLoadingInvoice(true);
+    if (!initialFallbackInvoice) {
+      setIsLoadingInvoice(true);
+    }
     fetch(`/api/paylinks?slug=${slug}`)
       .then((res) => res.json())
       .then((data) => {
         setIsLoadingInvoice(false);
         if (data.success && data.paylink) {
           const isPrivate = Boolean(data.paylink.isPrivate);
-          setInvoice({
+          const rawAmt = data.paylink.amountUsd || data.paylink.amount;
+          const safeAmt = typeof rawAmt === "number" && rawAmt > 0 ? rawAmt : (paramAmt || 10.0);
+          const loadedInvoice: InvoiceData = {
             id: slug,
             slug: slug,
-            creatorHandle: data.paylink.creatorHandle || "anonymous",
+            creatorHandle: data.paylink.creatorHandle || paramCreator || "anonymous",
             recipientNearAccount: data.paylink.recipientNearAccount || data.paylink.creatorWallet || "veilx-agent.testnet",
-            amountUsd: data.paylink.amountUsd || data.paylink.amount || 0.0,
+            amountUsd: safeAmt,
             description: isPrivate
               ? "🔒 Confidential Invoice (Encrypted Details)"
-              : (data.paylink.memo || "Payment Request"),
-          });
+              : (data.paylink.memo || paramMemo || "Payment Request"),
+          };
+          setInvoice(loadedInvoice);
+          setInvoiceNotFound(false);
+
+          // Automatically call handleFetchSolverQuote so the payer immediately sees exact amount in selected token!
+          handleFetchSolverQuote(selectedChain, selectedAsset, loadedInvoice);
+
           if (data.paylink.status === "settled") {
             setDepositStatus("SETTLED");
             if (data.paylink.settledTx) {
               setTxHash(data.paylink.settledTx);
             }
           }
+        } else if (initialFallbackInvoice) {
+          // Keep searchParams hydration fallback invoice active if DB is still synchronizing
+          setInvoiceNotFound(false);
+          handleFetchSolverQuote(selectedChain, selectedAsset, initialFallbackInvoice);
         } else {
           setInvoiceNotFound(true);
         }
@@ -282,67 +394,17 @@ export default function PayInvoicePage() {
       .catch((err) => {
         console.warn("Could not fetch paylink from DB:", err);
         setIsLoadingInvoice(false);
-        setInvoiceNotFound(true);
+        if (initialFallbackInvoice) {
+          setInvoiceNotFound(false);
+          handleFetchSolverQuote(selectedChain, selectedAsset, initialFallbackInvoice);
+        } else {
+          setInvoiceNotFound(true);
+        }
       });
   }, [slug]);
 
   // NEAR native amount calculation with live oracle price
   const estimatedNearAmount = invoice ? (invoice.amountUsd / nearPrice).toFixed(3) : "0.000";
-
-  // Omnichain solver route request via Defuse 1Click Solvers
-  const handleFetchSolverQuote = async (chain: string, asset?: string) => {
-    if (!invoice) return;
-    setIsQuoting(true);
-    setQuoteError(null);
-
-    const c = chain.toUpperCase();
-    let assetSymbol = asset ? asset.toUpperCase() : "USDC";
-    if (!asset) {
-      if (c === "SOLANA" || c === "SOL") assetSymbol = "SOL";
-      else if (c === "BITCOIN" || c === "BTC") assetSymbol = "BTC";
-      else if (c === "ETHEREUM" || c === "ETH") assetSymbol = "ETH";
-      else if (c === "BASE") assetSymbol = "ETH";
-      else if (c === "ARBITRUM") assetSymbol = "ETH";
-      else if (c === "NEAR") assetSymbol = "NEAR";
-    }
-
-    try {
-      const res = await fetch("/api/intents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sourceChain: c,
-          sourceAsset: assetSymbol,
-          targetChain: "NEAR",
-          targetAsset: "NEAR",
-          amount: invoice.amountUsd,
-          recipient: invoice.recipientNearAccount,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success || !data.order) {
-        throw new Error(data.error || "Failed to retrieve solver quote");
-      }
-
-      setQuoteDetails({
-        depositAddress: data.order.depositAddress,
-        originChain: data.order.sourceChain,
-        originAssetSymbol: data.order.sourceAsset,
-        amountInFormatted: data.order.sourceAmount.toString(),
-        amountInUsd: invoice.amountUsd.toFixed(2),
-        timeEstimateSeconds: data.order.timeEstimateSeconds || 25,
-        deadline: new Date(data.order.expiresAt).toLocaleTimeString(),
-      });
-      setQuoteSecondsLeft(60);
-      setDepositStatus("PENDING_DEPOSIT");
-    } catch (err: any) {
-      console.error("Quote error:", err);
-      setQuoteError(err.message || "Failed to obtain solver quote. Please try again.");
-    } finally {
-      setIsQuoting(false);
-    }
-  };
 
   // 60-Second Solver Quote Expiration Progress Ring with Auto-Requote
   useEffect(() => {
@@ -1180,5 +1242,24 @@ export default function PayInvoicePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function PayInvoicePage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center p-4">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-[#1E1315]" />
+            <span className="text-xs font-bold text-[#8C7A7C] uppercase tracking-wider">
+              Loading Invoice...
+            </span>
+          </div>
+        </div>
+      }
+    >
+      <PayInvoiceContent />
+    </React.Suspense>
   );
 }

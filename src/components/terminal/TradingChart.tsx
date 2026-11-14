@@ -45,7 +45,7 @@ interface TradingChartProps {
   className?: string;
 }
 
-export type Timeframe = "1H" | "1D" | "5D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "ALL";
+export type Timeframe = "15m" | "1H" | "4H" | "1D" | "5D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "ALL";
 type ChartType = "candlestick" | "area";
 
 interface CustomPriceLine {
@@ -61,9 +61,17 @@ function generateCandles(currentPrice: number, timeframe: Timeframe): Candlestic
   let intervalSeconds = 15 * 60; // 15 mins for 1D
 
   switch (timeframe) {
+    case "15m":
+      count = 96;
+      intervalSeconds = 15 * 60; // 15 minute candles
+      break;
     case "1H":
       count = 60;
       intervalSeconds = 60; // 1 minute candles
+      break;
+    case "4H":
+      count = 120;
+      intervalSeconds = 4 * 3600; // 4 hour candles
       break;
     case "1D":
       count = 96;
@@ -107,7 +115,9 @@ function generateCandles(currentPrice: number, timeframe: Timeframe): Candlestic
   const data: CandlestickData[] = [];
 
   let runningClose = currentPrice;
-  const volatility = currentPrice * (timeframe === "1H" ? 0.001 : timeframe === "1D" ? 0.003 : 0.008);
+  const volatility =
+    currentPrice *
+    (timeframe === "15m" ? 0.0008 : timeframe === "1H" ? 0.001 : timeframe === "4H" ? 0.002 : timeframe === "1D" ? 0.003 : 0.008);
 
   const rawPrices: { open: number; high: number; low: number; close: number }[] = [];
   for (let i = 0; i < count; i++) {
@@ -256,12 +266,14 @@ export function TradingChart({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
   const indicatorsRef = useRef<HTMLDivElement>(null);
+  const moreTimeframeRef = useRef<HTMLDivElement>(null);
 
   // Dropdown & Popover States
   const [isAssetDropdownOpen, setIsAssetDropdownOpen] = useState(false);
   const [assetSearchQuery, setAssetSearchQuery] = useState("");
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isIndicatorsOpen, setIsIndicatorsOpen] = useState(false);
+  const [isMoreTimeframesOpen, setIsMoreTimeframesOpen] = useState(false);
 
   // Custom Date Picker inputs
   const [customStartDate, setCustomStartDate] = useState("");
@@ -299,6 +311,9 @@ export function TradingChart({
       }
       if (indicatorsRef.current && !indicatorsRef.current.contains(e.target as Node)) {
         setIsIndicatorsOpen(false);
+      }
+      if (moreTimeframeRef.current && !moreTimeframeRef.current.contains(e.target as Node)) {
+        setIsMoreTimeframesOpen(false);
       }
     };
     document.addEventListener("mousedown", handleOutside);
@@ -400,7 +415,15 @@ export function TradingChart({
     priceLineHandlesRef.current = [];
 
     const container = chartContainerRef.current;
-    const chartHeight = isFullscreen ? container.clientHeight || 650 : 340;
+    const chartHeight = isFullscreen
+      ? container.clientHeight || 650
+      : typeof window !== "undefined"
+      ? window.innerWidth < 480
+        ? 220
+        : window.innerWidth < 768
+        ? 260
+        : 340
+      : 340;
 
     const chart = createChart(container, {
       width: container.clientWidth || 600,
@@ -575,7 +598,13 @@ export function TradingChart({
   useEffect(() => {
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
-        const newHeight = isFullscreen ? window.innerHeight - 110 : 340;
+        const newHeight = isFullscreen
+          ? window.innerHeight - 110
+          : window.innerWidth < 480
+          ? 220
+          : window.innerWidth < 768
+          ? 260
+          : 340;
         chartRef.current.applyOptions({
           width: chartContainerRef.current.clientWidth,
           height: newHeight,
@@ -1039,9 +1068,9 @@ export function TradingChart({
 
         {/* Right Toolbar: Timeframe Horizons, Date Picker, Technical Indicators & Fullscreen */}
         <div className="flex items-center gap-1.5 max-w-full overflow-x-auto no-scrollbar py-0.5 shrink-0">
-          {/* Expanded Timeframe Horizon Buttons */}
+          {/* Binance-Style Compact Timeframe Bar: 15m, 1h, 4h, 1D, More */}
           <div className="flex items-center bg-[#FAF7F0] border border-[#EBE3D5] rounded-xl p-0.5 shrink-0">
-            {(["1H", "1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"] as Timeframe[]).map((tf) => (
+            {(["15m", "1H", "4H", "1D"] as Timeframe[]).map((tf) => (
               <button
                 key={tf}
                 type="button"
@@ -1052,9 +1081,52 @@ export function TradingChart({
                     : "text-[#7A6A5E] hover:text-[#1E1315]"
                 }`}
               >
-                {tf}
+                {tf.toLowerCase() === "15m" ? "15m" : tf.toLowerCase() === "1h" ? "1h" : tf.toLowerCase() === "4h" ? "4h" : tf}
               </button>
             ))}
+
+            {/* More Dropdown */}
+            <div className="relative shrink-0" ref={moreTimeframeRef}>
+              <button
+                type="button"
+                onClick={() => setIsMoreTimeframesOpen(!isMoreTimeframesOpen)}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition cursor-pointer whitespace-nowrap flex items-center gap-0.5 ${
+                  ["5D", "1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"].includes(timeframe)
+                    ? "bg-[#1E1315] text-[#FAF7F0] shadow-xs"
+                    : "text-[#7A6A5E] hover:text-[#1E1315]"
+                }`}
+              >
+                <span>
+                  {["5D", "1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"].includes(timeframe)
+                    ? timeframe
+                    : "More"}
+                </span>
+                <ChevronDown className="w-2.5 h-2.5" />
+              </button>
+
+              {isMoreTimeframesOpen && (
+                <div className="absolute right-0 top-full mt-1.5 w-32 bg-white border border-[#EBE3D5] rounded-xl shadow-lg z-50 p-1 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+                  {(["1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"] as Timeframe[]).map((tf) => (
+                    <button
+                      key={tf}
+                      type="button"
+                      onClick={() => {
+                        setTimeframe(tf);
+                        setIsMoreTimeframesOpen(false);
+                      }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition cursor-pointer flex items-center justify-between ${
+                        timeframe === tf
+                          ? "bg-[#1E1315] text-[#FAF7F0]"
+                          : "text-[#6E5D4F] hover:bg-[#FAF7F0] hover:text-[#1E1315]"
+                      }`}
+                    >
+                      <span>{tf}</span>
+                      {timeframe === tf && <Check className="w-3 h-3 text-[#FAF7F0]" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Date Picker Button & Popover */}
@@ -1349,11 +1421,11 @@ export function TradingChart({
         </div>
       </div>
 
-      {/* Canvas Chart Mount Container (Fills Fullscreen if active, else 340px) */}
+      {/* Canvas Chart Mount Container (Responsive: h-[220px] on mobile <480px, h-[260px] on tablet, h-[340px] on desktop) */}
       <div
         ref={chartContainerRef}
         className={`w-full relative overflow-hidden rounded-2xl ${
-          isFullscreen ? "flex-1 min-h-0 bg-white border border-[#EBE3D5] shadow-xs" : "h-[340px]"
+          isFullscreen ? "flex-1 min-h-0 bg-white border border-[#EBE3D5] shadow-xs" : "h-[220px] sm:h-[260px] md:h-[340px]"
         }`}
       />
 

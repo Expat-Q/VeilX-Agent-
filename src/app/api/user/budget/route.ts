@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/models/User";
 import { verifySessionToken } from "@/lib/session";
+import { setOnChainGuardrails } from "@/lib/onchain-guardrails";
 
 export async function POST(req: Request) {
   try {
@@ -55,6 +56,15 @@ export async function POST(req: Request) {
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    // Sync guardrails on-chain on NEAR Protocol in background
+    setOnChainGuardrails({
+      accountId: user.nearAccountId,
+      dailyLimitUsd: user.spendingLimitUsd,
+      weeklyLimitUsd: user.weeklyLimitUsd ?? 200.0,
+    }).catch((chainErr) => {
+      console.warn("[budget-api] Background on-chain guardrail sync notice:", chainErr);
+    });
 
     return NextResponse.json({
       success: true,

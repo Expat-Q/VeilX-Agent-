@@ -134,7 +134,7 @@ export function OrderLedgerTabs({
 
       {/* Tab 1: Holdings & Positions */}
       {activeTab === "positions" && (
-        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-80 sm:max-h-64 overflow-y-auto pr-1">
           {positions.length === 0 ? (
             <div className="text-center py-8 text-[#6E5D4F] space-y-1">
               <Layers className="w-6 h-6 mx-auto opacity-40" />
@@ -149,10 +149,10 @@ export function OrderLedgerTabs({
               return (
                 <div
                   key={pos.symbol}
-                  className="p-2.5 rounded-2xl bg-[#FAF7F0] border border-[#EBE3D5] flex items-center justify-between gap-3 hover:border-[#1E1315] transition cursor-pointer"
+                  className="p-3 rounded-2xl bg-[#FAF7F0] border border-[#EBE3D5] flex items-center justify-between gap-2 sm:gap-3 hover:border-[#1E1315] transition cursor-pointer"
                   onClick={() => onSelectAssetForChart?.(pos.symbol)}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
                     <AssetLogo symbol={pos.symbol} className="w-8 h-8 rounded-full shadow-2xs shrink-0" />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-[#1E1315]">
@@ -161,7 +161,7 @@ export function OrderLedgerTabs({
                           {pos.shares} shares
                         </span>
                       </div>
-                      <div className="text-[10px] font-mono text-[#6E5D4F]">
+                      <div className="text-[10px] font-mono text-[#6E5D4F] truncate">
                         Entry: ${pos.avgEntryPrice.toFixed(2)} → Now: ${pos.currentPrice.toFixed(2)}
                       </div>
                     </div>
@@ -196,7 +196,7 @@ export function OrderLedgerTabs({
                         onClosePosition(pos.symbol);
                       }}
                       title="Sell position to cash"
-                      className="px-2 py-1 rounded-lg bg-white border border-[#EBE3D5] text-[10px] font-bold text-[#7A6A5E] hover:text-rose-700 hover:border-rose-300 transition"
+                      className="min-h-[32px] px-2.5 py-1 rounded-lg bg-white border border-[#EBE3D5] text-[10px] font-bold text-[#7A6A5E] hover:text-rose-700 hover:border-rose-300 transition shrink-0 cursor-pointer"
                     >
                       Sell
                     </button>

@@ -14,6 +14,12 @@ import {
   Info,
   CheckCircle2,
   AlertCircle,
+  Bot,
+  Sparkles,
+  Terminal,
+  Cpu,
+  Layers,
+  Lock,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getStoredAgentSession, saveAgentSession } from "@/lib/near-embedded-wallet";
@@ -35,7 +41,7 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
   const [showNearKey, setShowNearKey] = useState(false);
   const [importKeyInput, setImportKeyInput] = useState("");
   const [importMsg, setImportMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<"keys" | "import" | "mpc">("keys");
+  const [activeTab, setActiveTab] = useState<"keys" | "mpc" | "agents" | "import">("keys");
 
   useEffect(() => {
     if (!isOpen) return;
@@ -58,6 +64,23 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
 
   const session = getStoredAgentSession(user?.xHandle);
   const secretKey = session?.secretKey || "No private key stored";
+
+  const appOrigin = typeof window !== "undefined" ? window.location.origin : "https://veilx-agent.vercel.app";
+  const mcpEndpointUrl = `${appOrigin}/api/mcp`;
+  const openApiSchemaUrl = `${appOrigin}/api/openapi.json`;
+
+  const claudeConfigJson = JSON.stringify(
+    {
+      mcpServers: {
+        veil: {
+          command: "npx",
+          args: ["-y", "mcp-remote", mcpEndpointUrl],
+        },
+      },
+    },
+    null,
+    2
+  );
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -136,7 +159,7 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-white border border-[#EBE3D5] rounded-3xl p-6 shadow-xl space-y-5 relative max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-xl bg-white border border-[#EBE3D5] rounded-3xl p-6 shadow-xl space-y-5 relative max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -147,11 +170,12 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
             </div>
             <div>
               <h3 className="text-sm font-bold text-[#1E1315]">Wallet &amp; Security Settings</h3>
-              <p className="text-[11px] text-[#7A6A5E]">Non-custodial cryptographic keys &amp; MPC signatures</p>
+              <p className="text-[11px] text-[#7A6A5E]">Non-custodial cryptographic keys, MPC &amp; AI Agent integrations</p>
             </div>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close settings"
             className="p-1 rounded-lg text-[#7A6A5E] hover:text-[#1E1315] hover:bg-[#FAF7F0] transition cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -159,11 +183,11 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
         </div>
 
         {/* Sub-tabs */}
-        <div className="flex items-center gap-1 p-1 bg-[#FAF7F0] border border-[#EBE3D5] rounded-xl text-xs">
+        <div className="flex items-center gap-1 p-1 bg-[#FAF7F0] border border-[#EBE3D5] rounded-xl text-xs overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab("keys")}
-            className={`flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs transition ${
+            className={`flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs whitespace-nowrap transition ${
               activeTab === "keys" ? "bg-[#1E1315] text-[#FAF7F0] shadow-xs" : "text-[#7A6A5E] hover:text-[#1E1315]"
             }`}
           >
@@ -172,16 +196,26 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
           <button
             type="button"
             onClick={() => setActiveTab("mpc")}
-            className={`flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs transition ${
+            className={`flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs whitespace-nowrap transition ${
               activeTab === "mpc" ? "bg-[#1E1315] text-[#FAF7F0] shadow-xs" : "text-[#7A6A5E] hover:text-[#1E1315]"
             }`}
           >
-            Universal EVM (MPC)
+            Universal EVM
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("agents")}
+            className={`flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs whitespace-nowrap transition flex items-center justify-center gap-1.5 ${
+              activeTab === "agents" ? "bg-[#1E1315] text-[#FAF7F0] shadow-xs" : "text-[#7A6A5E] hover:text-[#1E1315]"
+            }`}
+          >
+            <Bot className="w-3.5 h-3.5 text-amber-500" />
+            <span>Connect AI Agents</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("import")}
-            className={`flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs transition ${
+            className={`flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs whitespace-nowrap transition ${
               activeTab === "import" ? "bg-[#1E1315] text-[#FAF7F0] shadow-xs" : "text-[#7A6A5E] hover:text-[#1E1315]"
             }`}
           >
@@ -305,7 +339,171 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
           </div>
         )}
 
-        {/* TAB 3: IMPORT EXTERNAL WALLET */}
+        {/* TAB 3: CONNECT AI AGENTS (CLAUDE DESKTOP / CHATGPT / ELIZA / OPENCLAW) */}
+        {activeTab === "agents" && (
+          <div className="space-y-5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-[#1E1315]" />
+                <h4 className="text-xs font-bold text-[#1E1315]">External AI Agent Connectivity</h4>
+              </div>
+              <p className="text-[11px] text-[#7A6A5E] leading-relaxed">
+                Empower external AI agents to query your tokenized equity portfolio, execute automated DCA, send social tips, and manage conditional rules with strict on-chain guardrails.
+              </p>
+            </div>
+
+            {/* Sub-Card 1: Claude Desktop (MCP JSON-RPC 2.0) */}
+            <div className="p-4 rounded-2xl bg-[#FAF7F0] border border-[#EBE3D5] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-[#D97706]/15 text-[#B45309] flex items-center justify-center font-bold text-[10px]">
+                    MCP
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-[#1E1315]">Claude Desktop Configuration</span>
+                    <p className="text-[10px] text-[#7A6A5E]">Standard Model Context Protocol (JSON-RPC 2.0)</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleCopy(claudeConfigJson, "claude-json")}
+                  className="px-2.5 py-1 rounded-lg bg-white border border-[#EBE3D5] hover:bg-[#FAF7F0] text-[#1E1315] text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                >
+                  {copiedKey === "claude-json" ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-700" />
+                      <span className="text-emerald-700">Copied Config</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Config JSON</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="relative">
+                <pre className="p-2.5 rounded-xl bg-[#1E1315] text-[#FAF7F0] font-mono text-[10px] overflow-x-auto leading-relaxed select-all">
+                  {claudeConfigJson}
+                </pre>
+              </div>
+
+              <p className="text-[10px] text-[#7A6A5E] leading-normal">
+                Paste inside your <code className="font-mono text-[#1E1315] bg-[#EBE3D5]/50 px-1 py-0.5 rounded">claude_desktop_config.json</code> under <code className="font-mono text-[#1E1315] bg-[#EBE3D5]/50 px-1 py-0.5 rounded">mcpServers</code>. Claude will automatically recognize all 8 Veil tools.
+              </p>
+            </div>
+
+            {/* Sub-Card 2: ChatGPT Custom GPT (OpenAPI 3.0 Actions) */}
+            <div className="p-4 rounded-2xl bg-[#FAF7F0] border border-[#EBE3D5] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-[#10A37F]/15 text-[#10A37F] flex items-center justify-center font-bold text-[10px]">
+                    GPT
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-[#1E1315]">ChatGPT Custom GPT Action Schema</span>
+                    <p className="text-[10px] text-[#7A6A5E]">OpenAPI 3.0 Specification URL</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleCopy(openApiSchemaUrl, "gpt-schema")}
+                  className="px-2.5 py-1 rounded-lg bg-white border border-[#EBE3D5] hover:bg-[#FAF7F0] text-[#1E1315] text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                >
+                  {copiedKey === "gpt-schema" ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-700" />
+                      <span className="text-emerald-700">Copied URL</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Schema URL</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-white border border-[#EBE3D5] flex items-center justify-between gap-2 font-mono text-[11px] text-[#1E1315] select-all break-all">
+                <span>{openApiSchemaUrl}</span>
+              </div>
+
+              <p className="text-[10px] text-[#7A6A5E] leading-normal">
+                In ChatGPT: Create a Custom GPT → <strong>Configure</strong> → <strong>Actions</strong> → click <strong>Import from URL</strong> and paste this schema URL.
+              </p>
+            </div>
+
+            {/* Sub-Card 3: Security & Scoped Session Keys Explanation */}
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2 text-[#78350F]">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#92400E]">
+                <Shield className="w-4 h-4 shrink-0" />
+                <span>Non-Custodial Session Key Scoping &amp; Spending Limits</span>
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                External AI agents operate strictly via <strong>scoped FunctionCall access keys</strong> on NEAR Protocol. They <em>never</em> receive master account custody or unrestricted signing privileges:
+              </p>
+              <div className="grid grid-cols-2 gap-2 pt-1 text-[10px] font-mono">
+                <div className="p-2 rounded-xl bg-white/70 border border-amber-500/20">
+                  <span className="text-[#92400E] font-bold block">Active Daily Allowance</span>
+                  <span className="text-sm font-bold text-[#1E1315]">${session?.spendingLimitUsd || 50}.00 USD</span>
+                </div>
+                <div className="p-2 rounded-xl bg-white/70 border border-amber-500/20">
+                  <span className="text-[#92400E] font-bold block">Per-Tx Safety Cap</span>
+                  <span className="text-sm font-bold text-[#1E1315]">${session?.perTxLimitUsd || 15}.00 USD</span>
+                </div>
+              </div>
+              <p className="text-[10px] text-[#92400E]/80 pt-1">
+                Any transaction exceeding your allocated budget is automatically rejected on-chain before execution.
+              </p>
+            </div>
+
+            {/* Sub-Card 4: Full 8-Tool Suite Badge Overview */}
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[#7A6A5E]">
+                Exposed Tool Suite (8 Autonomous Tools)
+              </span>
+              <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono">
+                <div className="p-2 rounded-xl bg-[#FAF7F0] border border-[#EBE3D5]">
+                  <span className="font-bold text-[#1E1315]">1. veil_get_portfolio</span>
+                  <p className="text-[9px] text-[#7A6A5E]">Positions, cash &amp; rules</p>
+                </div>
+                <div className="p-2 rounded-xl bg-[#FAF7F0] border border-[#EBE3D5]">
+                  <span className="font-bold text-[#1E1315]">2. veil_quote_stock</span>
+                  <p className="text-[9px] text-[#7A6A5E]">Live quotes &amp; RSI signals</p>
+                </div>
+                <div className="p-2 rounded-xl bg-[#FAF7F0] border border-[#EBE3D5]">
+                  <span className="font-bold text-[#1E1315]">3. veil_execute_dca</span>
+                  <p className="text-[9px] text-[#7A6A5E]">Automated recurring buy</p>
+                </div>
+                <div className="p-2 rounded-xl bg-[#FAF7F0] border border-[#EBE3D5]">
+                  <span className="font-bold text-[#1E1315]">4. veil_manage_rules</span>
+                  <p className="text-[9px] text-[#7A6A5E]">Dip, take profit &amp; stop loss</p>
+                </div>
+                <div className="p-2 rounded-xl bg-[#FAF7F0] border border-[#EBE3D5]">
+                  <span className="font-bold text-[#1E1315]">5. veil_send_tip</span>
+                  <p className="text-[9px] text-[#7A6A5E]">Social escrow tip to @handle</p>
+                </div>
+                <div className="p-2 rounded-xl bg-[#FAF7F0] border border-[#EBE3D5]">
+                  <span className="font-bold text-[#1E1315]">6. veil_direct_transfer</span>
+                  <p className="text-[9px] text-[#7A6A5E]">Wallet-to-wallet on-chain</p>
+                </div>
+                <div className="p-2 rounded-xl bg-[#FAF7F0] border border-[#EBE3D5]">
+                  <span className="font-bold text-[#1E1315]">7. veil_pay_invoice</span>
+                  <p className="text-[9px] text-[#7A6A5E]">1-Click PayLink settlement</p>
+                </div>
+                <div className="p-2 rounded-xl bg-[#FAF7F0] border border-[#EBE3D5]">
+                  <span className="font-bold text-[#1E1315]">8. veil_set_guardrails</span>
+                  <p className="text-[9px] text-[#7A6A5E]">On-chain risk limits</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: IMPORT EXTERNAL WALLET */}
         {activeTab === "import" && (
           <div className="space-y-4">
             <div className="space-y-2">

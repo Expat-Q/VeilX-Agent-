@@ -787,7 +787,7 @@ export function TransactionDashboard() {
 
   if (isLoading || isPortfolioLoading) {
     return (
-      <div className="max-w-4xl w-full mx-auto px-4 py-8 space-y-4">
+      <div className="max-w-4xl w-full mx-auto px-4 pt-8 pb-20 md:pb-8 space-y-4">
         <div className="bg-white rounded-3xl border border-[#EBE3D5] p-8 shadow-xs animate-pulse space-y-6">
           <div className="h-4 w-36 bg-[#EFE8D8] rounded"></div>
           <div className="h-10 w-56 bg-[#EFE8D8] rounded"></div>
@@ -802,7 +802,7 @@ export function TransactionDashboard() {
 
   if (!user) {
     return (
-      <div className="max-w-md w-full mx-auto px-4 py-16">
+      <div className="max-w-md w-full mx-auto px-4 pt-16 pb-20 md:pb-16">
         <div className="bg-white rounded-3xl border border-[#EBE3D5] p-8 text-center space-y-5 shadow-xs">
           <div className="w-14 h-14 rounded-2xl bg-[#1E1315] text-[#FAF7F0] flex items-center justify-center font-bold text-xl mx-auto shadow-sm">
             <Shield className="w-7 h-7 text-[#FAF7F0]" />
@@ -829,7 +829,7 @@ export function TransactionDashboard() {
   }
 
   return (
-    <div className="max-w-4xl w-full mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-4xl w-full mx-auto px-4 pt-6 pb-20 md:pb-6 space-y-6">
       {/* =========================================================================
           1. TOP UNIFIED PORTFOLIO NET WORTH CARD (With Icon-Only Eye Toggle)
          ========================================================================= */}
@@ -1035,12 +1035,12 @@ export function TransactionDashboard() {
       {/* =========================================================================
           2. CLEAN 4-TAB SWITCHER (All Holdings | Active Rules | PayLinks | Transfers)
          ========================================================================= */}
-      <div className="border-b border-[#EBE3D5] pb-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-max">
+      <div className="border-b border-[#EBE3D5] pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 snap-x">
           <button
             type="button"
             onClick={() => setActiveTab("all_holdings")}
-            className={`whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition cursor-pointer shrink-0 ${
+            className={`snap-start whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition cursor-pointer shrink-0 ${
               activeTab === "all_holdings"
                 ? "bg-[#1E1315] text-[#FAF7F0] shadow-xs"
                 : "text-[#6B5A4E] hover:text-[#1E1315] hover:bg-[#EFE8D8]"
@@ -1052,7 +1052,7 @@ export function TransactionDashboard() {
           <button
             type="button"
             onClick={() => setActiveTab("rules")}
-            className={`whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+            className={`snap-start whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
               activeTab === "rules"
                 ? "bg-[#1E1315] text-[#FAF7F0] shadow-xs"
                 : "text-[#6B5A4E] hover:text-[#1E1315] hover:bg-[#EFE8D8]"
@@ -1075,7 +1075,7 @@ export function TransactionDashboard() {
           <button
             type="button"
             onClick={() => setActiveTab("paylinks")}
-            className={`whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+            className={`snap-start whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
               activeTab === "paylinks"
                 ? "bg-[#1E1315] text-[#FAF7F0] shadow-xs"
                 : "text-[#6B5A4E] hover:text-[#1E1315] hover:bg-[#EFE8D8]"
@@ -1098,7 +1098,7 @@ export function TransactionDashboard() {
           <button
             type="button"
             onClick={() => setActiveTab("transfers")}
-            className={`whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition cursor-pointer shrink-0 ${
+            className={`snap-start whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition cursor-pointer shrink-0 ${
               activeTab === "transfers"
                 ? "bg-[#1E1315] text-[#FAF7F0] shadow-xs"
                 : "text-[#6B5A4E] hover:text-[#1E1315] hover:bg-[#EFE8D8]"

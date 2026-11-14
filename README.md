@@ -79,13 +79,16 @@ Veil is natively built on NEAR Protocol, leveraging its advanced chain abstracti
 1. [What Veil Does & The Problem It Solves](#-what-veil-does--the-problem-it-solves)
 2. [Why Veil Is Technically Unique](#-why-veil-is-technically-unique)
 3. [The Core Architecture: Inflow $\rightarrow$ Guardrails $\rightarrow$ Settlement](#-the-core-architecture)
-4. [Autonomous Tokenized Equities & DCA Engine](#-autonomous-tokenized-equities--dca-engine)
-5. [Frictionless Social Pay & Universal PayLinks](#-frictionless-social-pay--universal-paylinks)
-6. [Threat Model & Security Guarantees](#-threat-model--security-guarantees)
-7. [Supported Chains, Standards & Protocols](#-supported-chains-standards--protocols)
-8. [Local Reproduction & Verification](#-local-reproduction--verification)
-9. [Mainnet Transition Steps](#-mainnet-transition-steps)
-10. [License](#-license)
+4. [NEAR AI Cloud: Confidential TEE Intelligence Backbone](#-near-ai-cloud-confidential-tee-intelligence-backbone)
+5. [Autonomous Tokenized Equities & DCA Engine](#-autonomous-tokenized-equities--dca-engine)
+6. [Frictionless Social Pay & Universal PayLinks](#-frictionless-social-pay--universal-paylinks)
+7. [Protocol-Level Guardrails & HitL Quarantine](#-protocol-level-guardrails--hitl-quarantine)
+8. [External AI Agent Connectivity (MCP & OpenAPI)](#-external-ai-agent-connectivity-mcp--openapi)
+9. [Threat Model & Security Guarantees](#-threat-model--security-guarantees)
+10. [Supported Chains, Standards & Protocols](#-supported-chains-standards--protocols)
+11. [Local Reproduction & Verification](#-local-reproduction--verification)
+12. [Mainnet Transition Steps](#-mainnet-transition-steps)
+13. [License](#-license)
 
 ---
 
@@ -178,6 +181,45 @@ Veil is an **Autonomous Omnichain Social Finance Copilot** engineered on **NEAR 
 
 ---
 
+## 🧠 NEAR AI Cloud: Confidential TEE Intelligence Backbone
+
+At the core of Veil's autonomous cognitive layer is **NEAR AI Cloud** ([`api.near.ai`](https://cloud.near.ai)), providing hardware-enforced **Trusted Execution Environments (TEE)** running state-of-the-art open-weights foundation models (`meta-llama/Llama-3.3-70B-Instruct`).
+
+### 1. Why NEAR AI Cloud & Hardware TEEs?
+Traditional AI chatbots and financial copilots send unencrypted prompts and financial intentions to centralized API providers. In high-stakes decentralized finance, this introduces severe attack surfaces:
+* **Mempool Front-Running**: Eavesdroppers intercepting trade prompts before execution.
+* **Leakage of Proprietary Strategies**: Unencrypted prompt logs exposing private DCA bands, target exit multipliers, and confidential social pay memos.
+* **Model Tampering**: Vulnerability to unauthorized prompt injection or backend model manipulation.
+
+**Veil solves this with NEAR AI Cloud**:
+* **Cryptographic Memory Isolation**: Model inference executes inside confidential AMD SEV-SNP / Intel TDX hardware enclaves. The memory is encrypted at the silicon layer—neither cloud hosts, server administrators, nor adversarial eavesdroppers can inspect runtime memory.
+* **Zero Prompt Leakage**: Private financial parameters, user portfolio balances, and transaction amounts remain strictly confidential during context resolution.
+* **Verifiable Hardware Attestation**: Cryptographic attestation proofs guarantee that requests are evaluated by the authentic, untampered Llama-3.3-70B model weights.
+
+### 2. Structured JSON Function Calling (`NEAR_AI_TOOLS`)
+Veil equips NEAR AI with an exhaustive schema of **14 typed financial tools** registered in standard JSON Schema format:
+1. `tip_handle`: Handle-based social payments with automatic subaccount creation.
+2. `direct_transfer`: Sovereign wallet transfers with NEAR and EVM address guardrails.
+3. `create_invoice`: Dynamic multi-chain PayLinks with embedded USD valuations.
+4. `pay_invoice`: Universal cross-chain invoice settlement via Defuse 1Click solvers.
+5. `trade_stock`: Instant market execution of tokenized US equities (TSLAon, NVDAon, SPYon).
+6. `create_trading_rule`: 24/7 autonomous DCA schedules, dip-buys, and bracket exit orders.
+7. `get_portfolio`: Real-time on-chain balances and paper equity positions.
+8. `set_guardrails`: Dynamic configuration of daily/weekly on-chain spend limits.
+9. `claim_funds`: Gas-sponsored claims for incoming social escrow tips.
+10. `faucet`: Automated testnet gas replenishment (+0.25 NEAR).
+11. `query_history`: Historical ledger queries and execution logs.
+12. `get_market_price`: Real-time Pyth Network and Ondo Finance price quotes.
+13. `cancel_invoice`: On-demand invalidation of outstanding PayLinks.
+14. `execute_cross_chain_intent`: Multi-chain intent swaps across 38+ blockchains.
+
+### 3. Dual-Engine Hybrid AI Architecture
+To maximize both speed and deep intelligence, Veil implements a dual-tier execution pipeline:
+* **Tier 1 — Sub-Millisecond Deterministic FastPath Engine**: High-frequency, deterministic commands (`"Tip @expatq3 5 USDC"`, `"Buy $50 TSLA"`) are parsed in <5ms via strict regex and AST tokenizers, instantly returning structured payloads without external API latency.
+* **Tier 2 — NEAR AI Cloud TEE Fallback**: Nuanced conversational queries, compound trading strategies (`"DCA $20 into SPY whenever it pulls back 3% below the 20-day moving average"`), and ambiguous prompts are dispatched to NEAR AI Cloud inside the TEE enclave for robust semantic comprehension and structured tool synthesis.
+
+---
+
 ## 📈 Autonomous Tokenized Equities & DCA Engine
 
 Veil breaks down the barrier between Web3 liquidity and Wall Street equities. Users can trade curated tokenized US equities (issued via Ondo Finance and Defuse solvers) directly from chat or the interactive Trading Terminal:
@@ -207,6 +249,71 @@ Background cron services evaluate active trading rules against real-time Pyth/On
   * `"Invoice @acme $50 for Website Design"`
   * `"Create a $20 PayLink for my digital course"`
 * **Payer Chain Abstraction**: Payers can pay using **NEAR, Bitcoin, Solana, Ethereum, Base, or Arbitrum**. Solvers clear and settle the payment into the merchant's vault in ~15–25 seconds.
+
+---
+
+## 🛡️ Protocol-Level Guardrails & HitL Quarantine
+
+Unlike web applications that enforce spending limits only in off-chain databases or client-side JavaScript, Veil's security invariants are cryptographically anchored directly into the **NEAR Protocol smart contract layer (`contracts/veilx-escrow`)**:
+
+### 1. Dual Rolling Spending Ceilings
+* **Rolling 24-Hour Daily Cap (`daily_limit`)**: Automatically tracks cumulative outflows over a rolling 86,400-second window. Any attempt to exceed the cap causes the contract to panic with `GUARDRAIL_EXCEEDED`.
+* **Rolling 7-Day Weekly Cap (`weekly_limit`)**: Provides macro protection against gradual micro-drainage over a 604,800-second window.
+* **Per-Transaction Quarantine Threshold (`per_tx_quarantine_max`)**: Any transaction over $25.00 is classified as an anomaly, bypassing auto-execution and requiring explicit human biometric confirmation.
+
+### 2. Autonomous vs. Human-in-the-Loop (HitL) Quarantine
+```
+                       INCOMING FINANCIAL INTENT
+                                   │
+                                   ▼
+                   ┌───────────────────────────────┐
+                   │  Is Contract Frozen On-Chain? │──── YES ──► REVERT (Panic)
+                   └───────────────┬───────────────┘
+                                   │ NO
+                                   ▼
+                   ┌───────────────────────────────┐
+                   │ Amount <= Per-Tx Max ($25)    │
+                   │ & Daily Spent + Amt <= Cap?   │
+                   └───────────────┬───────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │ YES                         │ NO (Breach or Anomaly)
+                    ▼                             ▼
+       ┌────────────────────────┐    ┌────────────────────────┐
+       │  AUTONOMOUS EXECUTION  │    │  AMBER QUARANTINE CARD │
+       │  No popups; session key│    │  Suspended in Chat UI; │
+       │  signs transaction.    │    │  Requires User Sign-off│
+       └────────────────────────┘    └────────────────────────┘
+```
+
+### 3. Emergency On-Chain Freeze (`emergency_freeze`)
+Users retain absolute sovereign control. In the event of device theft, abnormal agent activity, or suspected session leakage, clicking **Emergency Freeze** invokes an on-chain transaction that flips `is_frozen = true`, immediately rejecting all transactions regardless of session keys or relayer status.
+
+---
+
+## 🤖 External AI Agent Connectivity (MCP & OpenAPI)
+
+Veil empowers users to connect their existing external AI agents—such as **Claude Desktop, ChatGPT Custom GPTs, Cursor, and autonomous terminal agents**—allowing them to directly manage and execute portfolio strategies through their Veil non-custodial smart wallet:
+
+### 1. Model Context Protocol (MCP) Server (`/api/mcp`)
+Veil implements the open **Model Context Protocol (MCP)** JSON-RPC 2.0 specification:
+* **Endpoint**: `https://veilx-agent.onrender.com/api/mcp`
+* **Configuration for Claude Desktop (`claude_desktop_config.json`)**:
+  ```json
+  {
+    "mcpServers": {
+      "veil": {
+        "command": "npx",
+        "args": ["-y", "mcp-remote-bridge", "https://veilx-agent.onrender.com/api/mcp"]
+      }
+    }
+  }
+  ```
+
+### 2. Universal OpenAPI 3.0 Specification (`/api/openapi.json`)
+Allows custom ChatGPT Actions, LangChain, AutoGPT, and ElizaOS agents to query market prices, check wallet balances, generate PayLinks, and trigger guarded DCA orders directly via standard REST schemas.
+
+---
 
 ---
 

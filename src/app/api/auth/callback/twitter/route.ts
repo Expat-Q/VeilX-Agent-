@@ -50,8 +50,10 @@ export async function GET(req: NextRequest) {
     });
 
     const defaultNearAccount = sanitizeNearAccountId(cleanHandle);
+    let isNewUser = false;
 
     if (!user) {
+      isNewUser = true;
       user = await User.create({
         xUserId: immutableXUserId,
         xHandle: cleanHandle,
@@ -101,7 +103,11 @@ export async function GET(req: NextRequest) {
     cookieStore.delete("oauth_callback_url");
     cookieStore.delete("oauth_return_to");
 
-    return NextResponse.redirect(new URL(`${savedReturnTo}?connected=true&handle=${cleanHandle}`, baseUrl));
+    if (isNewUser) {
+      return NextResponse.redirect(new URL(`/onboarding?connected=true&is_new=true&handle=${cleanHandle}`, baseUrl));
+    } else {
+      return NextResponse.redirect(new URL(`/terminal?connected=true&handle=${cleanHandle}`, baseUrl));
+    }
   } catch (error: any) {
     console.error("Twitter OAuth Callback Error:", error);
     const reason = error?.message || "unknown_error";

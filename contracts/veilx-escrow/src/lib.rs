@@ -11,6 +11,12 @@ const GAS_FOR_FT_TRANSFER: Gas = Gas::from_tgas(20);
 const GAS_FOR_RESOLVE: Gas = Gas::from_tgas(10);
 const MIN_DEPOSIT_NEAR: u128 = 10_000_000_000_000_000_000_000; // 0.01 NEAR
 
+pub const DEFAULT_DAILY_LIMIT: u128 = 50_000_000; // 50 USDC (6 decimals)
+pub const DEFAULT_WEEKLY_LIMIT: u128 = 200_000_000; // 200 USDC (6 decimals)
+pub const DEFAULT_PER_TX_MAX: u128 = 25_000_000; // 25 USDC (6 decimals)
+pub const DAILY_RESET_PERIOD_NS: u64 = 86_400_000_000_000; // 24 hours in nanoseconds
+pub const WEEKLY_RESET_PERIOD_NS: u64 = 604_800_000_000_000; // 7 days in nanoseconds
+
 #[ext_contract(ext_ft_core)]
 pub trait ExtFtCore {
     fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>) -> Promise;
@@ -29,6 +35,19 @@ pub struct TipRecord {
     pub created_at: u64,
 }
 
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct AccountGuardrails {
+    pub daily_limit: U128,
+    pub spent_today: U128,
+    pub last_daily_reset_ts: u64,
+    pub weekly_limit: U128,
+    pub spent_this_week: U128,
+    pub last_weekly_reset_ts: u64,
+    pub per_tx_quarantine_max: U128,
+    pub is_frozen: bool,
+}
+
 #[near(serializers = [json])]
 pub struct TransferMsg {
     pub tip_id: String,
@@ -41,6 +60,7 @@ pub struct TransferMsg {
 pub struct VeilXEscrow {
     pub owner_id: AccountId,
     pub tips: LookupMap<String, TipRecord>,
+    pub guardrails: LookupMap<AccountId, AccountGuardrails>,
 }
 
 #[near]
@@ -51,6 +71,7 @@ impl VeilXEscrow {
         Self {
             owner_id,
             tips: LookupMap::new(b"t"),
+            guardrails: LookupMap::new(b"g"),
         }
     }
 
@@ -60,7 +81,111 @@ impl VeilXEscrow {
         Self {
             owner_id: env::current_account_id(),
             tips: LookupMap::new(b"t"),
+            guardrails: LookupMap::new(b"g"),
         }
+    }
+
+    /// Sets custom spending guardrails for the predecessor account.
+    pub fn set_guardrails(&mut self, daily_limit: U128, weekly_limit: U128, per_tx_max: U128) {
+        let account_id = env::predecessor_account_id();
+        let now = env::block_timestamp();
+        let mut guardrails = self.guardrails.get(&account_id).cloned().unwrap_or_else(|| AccountGuardrails {
+            daily_limit,
+            spent_today: U128(0),
+            last_daily_reset_ts: now,
+            weekly_limit,
+            spent_this_week: U128(0),
+            last_weekly_reset_ts: now,
+            per_tx_quarantine_max: per_tx_max,
+            is_frozen: false,
+        });
+
+        if now >= guardrails.last_daily_reset_ts.saturating_add(DAILY_RESET_PERIOD_NS) {
+            guardrails.spent_today = U128(0);
+            guardrails.last_daily_reset_ts = now;
+        }
+
+        if now >= guardrails.last_weekly_reset_ts.saturating_add(WEEKLY_RESET_PERIOD_NS) {
+            guardrails.spent_this_week = U128(0);
+            guardrails.last_weekly_reset_ts = now;
+        }
+
+        guardrails.daily_limit = daily_limit;
+        guardrails.weekly_limit = weekly_limit;
+        guardrails.per_tx_quarantine_max = per_tx_max;
+        self.guardrails.insert(account_id, guardrails);
+    }
+
+    /// Enables or disables emergency freeze for the predecessor account.
+    pub fn emergency_freeze(&mut self, frozen: bool) {
+        let account_id = env::predecessor_account_id();
+        let now = env::block_timestamp();
+        let mut guardrails = self.guardrails.get(&account_id).cloned().unwrap_or_else(|| AccountGuardrails {
+            daily_limit: U128(DEFAULT_DAILY_LIMIT),
+            spent_today: U128(0),
+            last_daily_reset_ts: now,
+            weekly_limit: U128(DEFAULT_WEEKLY_LIMIT),
+            spent_this_week: U128(0),
+            last_weekly_reset_ts: now,
+            per_tx_quarantine_max: U128(DEFAULT_PER_TX_MAX),
+            is_frozen: false,
+        });
+
+        guardrails.is_frozen = frozen;
+        self.guardrails.insert(account_id, guardrails);
+    }
+
+    /// Verifies spending invariants, updates rolling counters, and persists guardrails.
+    pub fn check_and_record_spend(&mut self, account: AccountId, amount: U128) {
+        let now = env::block_timestamp();
+        let mut guardrails = self.guardrails.get(&account).cloned().unwrap_or_else(|| AccountGuardrails {
+            daily_limit: U128(DEFAULT_DAILY_LIMIT),
+            spent_today: U128(0),
+            last_daily_reset_ts: now,
+            weekly_limit: U128(DEFAULT_WEEKLY_LIMIT),
+            spent_this_week: U128(0),
+            last_weekly_reset_ts: now,
+            per_tx_quarantine_max: U128(DEFAULT_PER_TX_MAX),
+            is_frozen: false,
+        });
+
+        if guardrails.is_frozen {
+            env::panic_str("ACCOUNT_FROZEN: Account is frozen by emergency safety control");
+        }
+
+        // Rolling 24-hour reset
+        if now >= guardrails.last_daily_reset_ts.saturating_add(DAILY_RESET_PERIOD_NS) {
+            guardrails.spent_today = U128(0);
+            guardrails.last_daily_reset_ts = now;
+        }
+
+        // Rolling 7-day reset
+        if now >= guardrails.last_weekly_reset_ts.saturating_add(WEEKLY_RESET_PERIOD_NS) {
+            guardrails.spent_this_week = U128(0);
+            guardrails.last_weekly_reset_ts = now;
+        }
+
+        // Check daily limit
+        let new_spent_today = guardrails.spent_today.0.checked_add(amount.0).expect("Integer overflow");
+        if new_spent_today > guardrails.daily_limit.0 {
+            env::panic_str("GUARDRAIL_EXCEEDED: Daily spending limit breached on-chain");
+        }
+
+        // Check weekly limit
+        let new_spent_week = guardrails.spent_this_week.0.checked_add(amount.0).expect("Integer overflow");
+        if new_spent_week > guardrails.weekly_limit.0 {
+            env::panic_str("GUARDRAIL_EXCEEDED: Weekly spending limit breached on-chain");
+        }
+
+        guardrails.spent_today = U128(new_spent_today);
+        guardrails.spent_this_week = U128(new_spent_week);
+
+        self.guardrails.insert(account, guardrails);
+    }
+
+    /// View method: retrieves account guardrails
+    pub fn get_guardrails(&self, account: AccountId) -> Option<AccountGuardrails> {
+        self.guardrails.get(&account).cloned()
     }
 
     /// Receives NEP-141 tokens from 1Click solvers or direct payers.
@@ -80,6 +205,9 @@ impl VeilXEscrow {
             !self.tips.contains_key(&parsed_msg.tip_id),
             "Tip ID already exists in escrow"
         );
+
+        // Guardrail spend check for sender account
+        self.check_and_record_spend(sender_id.clone(), amount);
 
         let (recipient_handle, commitment) = if let Some(ref c) = parsed_msg.commitment {
             ("[private]".to_string(), Some(c.to_lowercase()))
@@ -120,9 +248,16 @@ impl VeilXEscrow {
             "Tip ID already exists in escrow"
         );
 
+        let sender = env::predecessor_account_id();
+        // Convert yoctoNEAR (24 decimals) to standard 6-decimal micro-USD units (1 NEAR ~ $5 USD)
+        // 1 NEAR = 10^24 yoctoNEAR -> divided by 10^18 = 10^6 micro-units * $5 = 5,000,000 micro-USD
+        let raw_near_micro = deposit.as_yoctonear() / 1_000_000_000_000_000_000;
+        let usd_micro_spend = std::cmp::max(raw_near_micro.saturating_mul(5), 1);
+        self.check_and_record_spend(sender.clone(), U128(usd_micro_spend));
+
         let record = TipRecord {
             tip_id: tip_id.clone(),
-            sender: env::predecessor_account_id(),
+            sender,
             recipient_handle: recipient_handle.to_lowercase(),
             commitment: None,
             token_id: env::current_account_id(), // Indicates native NEAR
@@ -152,9 +287,16 @@ impl VeilXEscrow {
             "Invalid commitment: Expected 64-character hex-encoded SHA-256 hash"
         );
 
+        let sender = env::predecessor_account_id();
+        // Convert yoctoNEAR (24 decimals) to standard 6-decimal micro-USD units (1 NEAR ~ $5 USD)
+        // 1 NEAR = 10^24 yoctoNEAR -> divided by 10^18 = 10^6 micro-units * $5 = 5,000,000 micro-USD
+        let raw_near_micro = deposit.as_yoctonear() / 1_000_000_000_000_000_000;
+        let usd_micro_spend = std::cmp::max(raw_near_micro.saturating_mul(5), 1);
+        self.check_and_record_spend(sender.clone(), U128(usd_micro_spend));
+
         let record = TipRecord {
             tip_id: tip_id.clone(),
-            sender: env::predecessor_account_id(),
+            sender,
             recipient_handle: "[private]".to_string(),
             commitment: Some(commitment.to_lowercase()),
             token_id: env::current_account_id(), // Indicates native NEAR
@@ -416,20 +558,28 @@ mod tests {
         let context = VMContextBuilder::new()
             .current_account_id(owner.clone())
             .predecessor_account_id(usdc_token.clone())
+            .block_timestamp(1_000_000_000_000)
             .build();
         testing_env!(context);
 
         let mut contract = VeilXEscrow::new(owner);
         let msg = r#"{"tip_id": "tip_101", "recipient_handle": "expatq3"}"#;
         
-        let result = contract.ft_on_transfer(sender.clone(), U128(5000000), msg.to_string());
-        assert_eq!(result, PromiseOrValue::Value(U128(0)));
+        let result = contract.ft_on_transfer(sender.clone(), U128(5_000_000), msg.to_string());
+        match result {
+            PromiseOrValue::Value(val) => assert_eq!(val, U128(0)),
+            _ => panic!("Expected Value(0)"),
+        }
 
         let tip = contract.get_tip("tip_101".to_string()).expect("Tip should exist");
         assert_eq!(tip.recipient_handle, "expatq3");
-        assert_eq!(tip.amount, U128(5000000));
+        assert_eq!(tip.amount, U128(5_000_000));
         assert_eq!(tip.token_id, usdc_token);
         assert!(!tip.claimed);
+
+        let guardrails = contract.get_guardrails(sender).expect("Guardrails should be set");
+        assert_eq!(guardrails.spent_today, U128(5_000_000));
+        assert_eq!(guardrails.spent_this_week, U128(5_000_000));
     }
 
     #[test]
@@ -443,12 +593,13 @@ mod tests {
         let context = VMContextBuilder::new()
             .current_account_id(owner.clone())
             .predecessor_account_id(usdc_token.clone())
+            .block_timestamp(1_000_000_000_000)
             .build();
         testing_env!(context);
 
         let mut contract = VeilXEscrow::new(owner);
         let msg = r#"{"tip_id": "tip_102", "recipient_handle": "victim"}"#;
-        contract.ft_on_transfer(sender, U128(1000000), msg.to_string());
+        let _ = contract.ft_on_transfer(sender, U128(1_000_000), msg.to_string());
 
         // Attacker attempts to claim
         let attacker_context = VMContextBuilder::new()
@@ -457,6 +608,243 @@ mod tests {
             .build();
         testing_env!(attacker_context);
 
-        contract.claim_tip("tip_102".to_string(), attacker);
+        let _ = contract.claim_tip("tip_102".to_string(), attacker);
+    }
+
+    #[test]
+    fn test_daily_cap_and_24h_reset() {
+        let owner: AccountId = "escrow.near".parse().unwrap();
+        let user: AccountId = "user.near".parse().unwrap();
+
+        let mut builder = VMContextBuilder::new();
+        builder
+            .current_account_id(owner.clone())
+            .predecessor_account_id(user.clone())
+            .block_timestamp(1_000_000_000_000);
+        testing_env!(builder.build());
+
+        let mut contract = VeilXEscrow::new(owner);
+
+        // Set custom limits: daily 50 USDC, weekly 200 USDC, per_tx 25 USDC
+        contract.set_guardrails(U128(50_000_000), U128(200_000_000), U128(25_000_000));
+
+        // First spend: 30 USDC
+        contract.check_and_record_spend(user.clone(), U128(30_000_000));
+        let g = contract.get_guardrails(user.clone()).unwrap();
+        assert_eq!(g.spent_today, U128(30_000_000));
+        assert_eq!(g.spent_this_week, U128(30_000_000));
+
+        // Second spend: 20 USDC (hits exactly daily limit of 50 USDC)
+        contract.check_and_record_spend(user.clone(), U128(20_000_000));
+        let g2 = contract.get_guardrails(user.clone()).unwrap();
+        assert_eq!(g2.spent_today, U128(50_000_000));
+        assert_eq!(g2.spent_this_week, U128(50_000_000));
+
+        // Advance timestamp past 24 hours (86,400s = 86_400_000_000_000 ns)
+        builder.block_timestamp(1_000_000_000_000 + DAILY_RESET_PERIOD_NS);
+        testing_env!(builder.build());
+
+        // Daily limit resets, spend 25 USDC succeeds
+        contract.check_and_record_spend(user.clone(), U128(25_000_000));
+        let g3 = contract.get_guardrails(user).unwrap();
+        assert_eq!(g3.spent_today, U128(25_000_000));
+        assert_eq!(g3.spent_this_week, U128(75_000_000));
+    }
+
+    #[test]
+    #[should_panic(expected = "GUARDRAIL_EXCEEDED: Daily spending limit breached on-chain")]
+    fn test_daily_cap_breach_panics() {
+        let owner: AccountId = "escrow.near".parse().unwrap();
+        let user: AccountId = "user.near".parse().unwrap();
+
+        let context = VMContextBuilder::new()
+            .current_account_id(owner.clone())
+            .predecessor_account_id(user.clone())
+            .block_timestamp(1_000_000_000_000)
+            .build();
+        testing_env!(context);
+
+        let mut contract = VeilXEscrow::new(owner);
+        contract.set_guardrails(U128(50_000_000), U128(200_000_000), U128(25_000_000));
+
+        contract.check_and_record_spend(user.clone(), U128(30_000_000));
+        // Spending another 25_000_000 brings total to 55_000_000 > 50_000_000 -> PANIC
+        contract.check_and_record_spend(user, U128(25_000_000));
+    }
+
+    #[test]
+    fn test_weekly_cap_and_7day_reset() {
+        let owner: AccountId = "escrow.near".parse().unwrap();
+        let user: AccountId = "user.near".parse().unwrap();
+
+        let mut builder = VMContextBuilder::new();
+        let base_ts = 1_000_000_000_000u64;
+        builder
+            .current_account_id(owner.clone())
+            .predecessor_account_id(user.clone())
+            .block_timestamp(base_ts);
+        testing_env!(builder.build());
+
+        let mut contract = VeilXEscrow::new(owner);
+        // Daily: 100 USDC, Weekly: 150 USDC
+        contract.set_guardrails(U128(100_000_000), U128(150_000_000), U128(100_000_000));
+
+        // Day 1: spend 90 USDC
+        contract.check_and_record_spend(user.clone(), U128(90_000_000));
+        let g1 = contract.get_guardrails(user.clone()).unwrap();
+        assert_eq!(g1.spent_today, U128(90_000_000));
+        assert_eq!(g1.spent_this_week, U128(90_000_000));
+
+        // Advance 24h -> spent_today resets to 0, spent_this_week remains 90 USDC
+        builder.block_timestamp(base_ts + DAILY_RESET_PERIOD_NS);
+        testing_env!(builder.build());
+
+        // Day 2: spend 50 USDC -> total weekly is 140 USDC (below 150 limit)
+        contract.check_and_record_spend(user.clone(), U128(50_000_000));
+        let g2 = contract.get_guardrails(user.clone()).unwrap();
+        assert_eq!(g2.spent_today, U128(50_000_000));
+        assert_eq!(g2.spent_this_week, U128(140_000_000));
+
+        // Advance 7 days from base -> rolling weekly resets
+        builder.block_timestamp(base_ts + WEEKLY_RESET_PERIOD_NS + 10);
+        testing_env!(builder.build());
+
+        // Spend 80 USDC -> succeeds because weekly reset to 0!
+        contract.check_and_record_spend(user.clone(), U128(80_000_000));
+        let g3 = contract.get_guardrails(user).unwrap();
+        assert_eq!(g3.spent_today, U128(80_000_000));
+        assert_eq!(g3.spent_this_week, U128(80_000_000));
+    }
+
+    #[test]
+    #[should_panic(expected = "GUARDRAIL_EXCEEDED: Weekly spending limit breached on-chain")]
+    fn test_weekly_cap_breach_panics() {
+        let owner: AccountId = "escrow.near".parse().unwrap();
+        let user: AccountId = "user.near".parse().unwrap();
+
+        let mut builder = VMContextBuilder::new();
+        let base_ts = 1_000_000_000_000u64;
+        builder
+            .current_account_id(owner.clone())
+            .predecessor_account_id(user.clone())
+            .block_timestamp(base_ts);
+        testing_env!(builder.build());
+
+        let mut contract = VeilXEscrow::new(owner);
+        // Daily: 100 USDC, Weekly: 150 USDC
+        contract.set_guardrails(U128(100_000_000), U128(150_000_000), U128(100_000_000));
+
+        // Day 1: spend 90 USDC
+        contract.check_and_record_spend(user.clone(), U128(90_000_000));
+
+        // Day 2 (after 24h): spend 50 USDC -> weekly total 140 USDC
+        builder.block_timestamp(base_ts + DAILY_RESET_PERIOD_NS);
+        testing_env!(builder.build());
+        contract.check_and_record_spend(user.clone(), U128(50_000_000));
+
+        // Attempt to spend another 20 USDC -> weekly total would be 160 > 150 -> PANIC
+        contract.check_and_record_spend(user, U128(20_000_000));
+    }
+
+    #[test]
+    #[should_panic(expected = "ACCOUNT_FROZEN: Account is frozen by emergency safety control")]
+    fn test_emergency_freeze_blocks_spend() {
+        let owner: AccountId = "escrow.near".parse().unwrap();
+        let user: AccountId = "user.near".parse().unwrap();
+
+        let context = VMContextBuilder::new()
+            .current_account_id(owner.clone())
+            .predecessor_account_id(user.clone())
+            .block_timestamp(1_000_000_000_000)
+            .build();
+        testing_env!(context);
+
+        let mut contract = VeilXEscrow::new(owner);
+        // User freezes their account
+        contract.emergency_freeze(true);
+
+        let g = contract.get_guardrails(user.clone()).unwrap();
+        assert!(g.is_frozen);
+
+        // Attempt to spend while frozen -> PANIC
+        contract.check_and_record_spend(user, U128(1_000_000));
+    }
+
+    #[test]
+    fn test_emergency_freeze_and_unfreeze() {
+        let owner: AccountId = "escrow.near".parse().unwrap();
+        let user: AccountId = "user.near".parse().unwrap();
+
+        let context = VMContextBuilder::new()
+            .current_account_id(owner.clone())
+            .predecessor_account_id(user.clone())
+            .block_timestamp(1_000_000_000_000)
+            .build();
+        testing_env!(context);
+
+        let mut contract = VeilXEscrow::new(owner);
+
+        // Freeze
+        contract.emergency_freeze(true);
+        assert!(contract.get_guardrails(user.clone()).unwrap().is_frozen);
+
+        // Unfreeze
+        contract.emergency_freeze(false);
+        assert!(!contract.get_guardrails(user.clone()).unwrap().is_frozen);
+
+        // Spend succeeds after unfreeze
+        contract.check_and_record_spend(user.clone(), U128(10_000_000));
+        assert_eq!(contract.get_guardrails(user).unwrap().spent_today, U128(10_000_000));
+    }
+
+    #[test]
+    fn test_default_guardrails_for_new_account() {
+        let owner: AccountId = "escrow.near".parse().unwrap();
+        let user: AccountId = "newuser.near".parse().unwrap();
+
+        let context = VMContextBuilder::new()
+            .current_account_id(owner.clone())
+            .predecessor_account_id(user.clone())
+            .block_timestamp(1_000_000_000_000)
+            .build();
+        testing_env!(context);
+
+        let mut contract = VeilXEscrow::new(owner);
+        assert!(contract.get_guardrails(user.clone()).is_none());
+
+        // Spend with defaults
+        contract.check_and_record_spend(user.clone(), U128(15_000_000));
+        let g = contract.get_guardrails(user).expect("Guardrails should be initialized with defaults");
+        assert_eq!(g.daily_limit, U128(DEFAULT_DAILY_LIMIT));
+        assert_eq!(g.weekly_limit, U128(DEFAULT_WEEKLY_LIMIT));
+        assert_eq!(g.per_tx_quarantine_max, U128(DEFAULT_PER_TX_MAX));
+        assert_eq!(g.spent_today, U128(15_000_000));
+        assert_eq!(g.spent_this_week, U128(15_000_000));
+        assert!(!g.is_frozen);
+    }
+
+    #[test]
+    fn test_deposit_near_tip_records_guardrail_spend() {
+        let owner: AccountId = "escrow.near".parse().unwrap();
+        let sender: AccountId = "tipper.near".parse().unwrap();
+        let deposit_amount = 20_000_000_000_000_000_000_000u128; // 0.02 NEAR
+
+        let context = VMContextBuilder::new()
+            .current_account_id(owner.clone())
+            .predecessor_account_id(sender.clone())
+            .attached_deposit(NearToken::from_yoctonear(deposit_amount))
+            .block_timestamp(1_000_000_000_000)
+            .build();
+        testing_env!(context);
+
+        let mut contract = VeilXEscrow::new(owner);
+
+        contract.deposit_near_tip("tip_near_1".to_string(), "recipient_handle".to_string());
+
+        // 0.02 NEAR = 20,000 micro-NEAR * 5 = 100,000 micro-USD ($0.10)
+        let expected_usd_spend = U128(100_000);
+        let g = contract.get_guardrails(sender).expect("Guardrails should be updated");
+        assert_eq!(g.spent_today, expected_usd_spend);
+        assert_eq!(g.spent_this_week, expected_usd_spend);
     }
 }

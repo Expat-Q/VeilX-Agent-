@@ -1,14 +1,17 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, X, ArrowRight, RefreshCw, Shield } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, AlertTriangle, X, ArrowRight, RefreshCw, Shield, Sparkles } from "lucide-react";
 
 interface OAuthStatusModalProps {
   onRetryLogin?: () => void;
 }
 
 export function OAuthStatusModal({ onRetryLogin }: OAuthStatusModalProps) {
+  const router = useRouter();
   const [status, setStatus] = useState<"success" | "error" | null>(null);
+  const [isNewUser, setIsNewUser] = useState<boolean>(false);
   const [handle, setHandle] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -18,12 +21,14 @@ export function OAuthStatusModal({ onRetryLogin }: OAuthStatusModalProps) {
     try {
       const params = new URLSearchParams(window.location.search);
       const isConnected = params.get("connected") === "true";
+      const isNew = params.get("is_new") === "true";
       const errorParam = params.get("error");
       const reasonParam = params.get("reason");
       const handleParam = params.get("handle");
 
       if (isConnected) {
         setStatus("success");
+        setIsNewUser(isNew);
         setHandle(handleParam || null);
         // Clean up URL query parameters without full reload
         window.history.replaceState({}, "", window.location.pathname);
@@ -51,6 +56,16 @@ export function OAuthStatusModal({ onRetryLogin }: OAuthStatusModalProps) {
     }
   };
 
+  const handleStartOnboarding = () => {
+    handleClose();
+    router.push("/onboarding");
+  };
+
+  const handleLaunchTerminal = () => {
+    handleClose();
+    router.push("/terminal");
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-[#1E1315]/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
@@ -73,15 +88,17 @@ export function OAuthStatusModal({ onRetryLogin }: OAuthStatusModalProps) {
           /* Success View */
           <div className="space-y-5 text-center">
             <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
-              <CheckCircle2 className="w-8 h-8" />
+              {isNewUser ? <Sparkles className="w-8 h-8" /> : <CheckCircle2 className="w-8 h-8" />}
             </div>
 
             <div className="space-y-1.5">
               <h3 className="text-lg font-bold text-[#1E1315]">
-                Account Connected!
+                {isNewUser ? "Account Connected!" : `Welcome back, @${handle || "trader"}!`}
               </h3>
               <p className="text-xs text-[#6E5D4F] max-w-xs mx-auto leading-relaxed">
-                Your 𝕏 identity is authenticated and linked with Veil&apos;s non-custodial smart session.
+                {isNewUser
+                  ? "Welcome to Veil. Let's set up your portfolio & trading preferences."
+                  : "Your session keys are active and synced. Ready to execute algorithmic trades and cross-chain orders."}
               </p>
             </div>
 
@@ -104,13 +121,23 @@ export function OAuthStatusModal({ onRetryLogin }: OAuthStatusModalProps) {
               <span>Session keys remain protected in your browser. All transactions require your explicit approval or pre-set guardrails.</span>
             </div>
 
-            <button
-              onClick={handleClose}
-              className="w-full h-11 rounded-2xl bg-[#1E1315] hover:bg-[#2C1D20] text-[#FAF7F0] text-xs font-bold flex items-center justify-center gap-2 transition shadow-xs cursor-pointer"
-            >
-              <span>Continue</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            {isNewUser ? (
+              <button
+                onClick={handleStartOnboarding}
+                className="w-full h-11 rounded-2xl bg-[#1E1315] hover:bg-[#2C1D20] text-[#FAF7F0] text-xs font-bold flex items-center justify-center gap-2 transition shadow-xs cursor-pointer"
+              >
+                <span>Start Onboarding →</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={handleLaunchTerminal}
+                className="w-full h-11 rounded-2xl bg-[#1E1315] hover:bg-[#2C1D20] text-[#FAF7F0] text-xs font-bold flex items-center justify-center gap-2 transition shadow-xs cursor-pointer"
+              >
+                <span>Launch Terminal →</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
         ) : (
           /* Error View */

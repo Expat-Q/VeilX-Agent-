@@ -123,7 +123,7 @@ export function HeaderNav() {
 
   return (
     <>
-      <header className="h-14 sm:h-16 border-b border-butter-300 bg-butter-50/95 backdrop-blur-md sticky top-0 z-40 px-2 sm:px-6 lg:px-8 flex items-center justify-between shadow-subtle max-w-full">
+      <header className="h-14 sm:h-16 border-b border-butter-300 bg-butter-50/95 backdrop-blur-md sticky top-0 z-40 px-3 sm:px-6 lg:px-8 flex items-center justify-between shadow-subtle max-w-full">
         {/* Left: Brand Identity */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           <Link href="/" className="flex items-center gap-1.5 sm:gap-2">
@@ -148,8 +148,8 @@ export function HeaderNav() {
           </Link>
         </div>
 
-        {/* Center: Navigation Switcher (Terminal vs Chat vs Dashboard) */}
-        <nav className="flex items-center gap-0.5 sm:gap-1 bg-butter-200/90 p-0.5 sm:p-1 rounded-xl border border-butter-300 shadow-inner shrink-0">
+        {/* Center: Navigation Switcher (Terminal vs Chat vs Dashboard - Hidden on Mobile, handled by BottomNav) */}
+        <nav className="hidden md:flex items-center gap-1 bg-butter-200/90 p-1 rounded-xl border border-butter-300 shadow-inner shrink-0">
           <Link
             href="/terminal"
             className={`h-7 px-2 sm:px-3 rounded-lg text-xs font-bold flex items-center gap-1 sm:gap-1.5 transition ${

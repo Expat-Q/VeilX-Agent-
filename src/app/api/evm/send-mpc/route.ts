@@ -10,6 +10,7 @@ import { verifySessionToken } from "@/lib/session";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/models/User";
 import { getLiveEthPrice } from "@/lib/oracle-service";
+import { recordOnChainSpend } from "@/lib/onchain-guardrails";
 
 const TESTNET_RPC = process.env.NEXT_PUBLIC_NEAR_NODE_URL || "https://test.rpc.fastnear.com";
 const ESCROW_PRIVATE_KEY = process.env.ESCROW_PRIVATE_KEY;
@@ -106,6 +107,21 @@ export async function POST(req: NextRequest) {
       } catch (keyErr) {
         console.warn("[EVM MPC API] Failed to initialize NEAR account for signer:", keyErr);
       }
+    }
+
+    // 2.5. Enforce On-Chain Smart Contract Guardrail on NEAR
+    try {
+      await recordOnChainSpend({
+        accountId: userSenderId,
+        amountUsd: transferAmountUsd,
+        signerAccount: nearAccount,
+      });
+    } catch (guardrailErr: any) {
+      console.warn("[EVM MPC API] On-chain guardrail blocked transfer:", guardrailErr.message);
+      return NextResponse.json(
+        { error: guardrailErr.message || "On-chain guardrail rejected transfer" },
+        { status: 403 }
+      );
     }
 
     const result = await createAndSignBaseTransaction({

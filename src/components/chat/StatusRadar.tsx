@@ -43,8 +43,8 @@ export function StatusRadar({ steps, title = "Live Execution Radar" }: StatusRad
   };
 
   return (
-    <div className="my-3 p-3.5 rounded-2xl border border-[#EBE3D5] bg-[#FAF7F0] shadow-2xs">
-      <div className="flex items-center gap-2 mb-2.5 pb-2 border-b border-[#F2EBDC] text-[11px] font-mono font-bold tracking-wider uppercase text-[#1E1315]">
+    <div className="mt-2.5 p-3 rounded-xl border border-[#EBE3D5] bg-[#FAF7F0] space-y-2">
+      <div className="flex items-center gap-1.5 pb-1.5 border-b border-[#F2EBDC] text-[10px] font-mono font-bold tracking-wider uppercase text-[#7A6A5E]">
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
@@ -52,10 +52,10 @@ export function StatusRadar({ steps, title = "Live Execution Radar" }: StatusRad
         <span>{title}</span>
       </div>
 
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         {steps.map((step) => {
           return (
-            <div key={step.id} className="flex items-start gap-2.5 text-xs">
+            <div key={step.id} className="flex items-start gap-2 text-xs">
               <div className="mt-0.5 shrink-0">
                 {step.status === "completed" && (
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
@@ -81,34 +81,27 @@ export function StatusRadar({ steps, title = "Live Execution Radar" }: StatusRad
                       : "text-[#7A6A5E] font-normal"
                   }
                 >
-                  {step.label}
+                  {step.label
+                    .replace(/via NEAR (?:MPC|Session) Key/gi, "Authorized")
+                    .replace(/0x[a-fA-F0-9]{38,42}/g, (a) => `${a.slice(0, 6)}...${a.slice(-4)}`)}
                 </span>
 
                 {step.txHash && (
-                  <div className="text-[11px] text-[#7A6A5E] font-mono mt-1 flex flex-wrap items-center gap-2">
-                    <span
-                      className="font-semibold text-[#1E1315] bg-[#F2EBDC] px-2 py-0.5 rounded text-[11px] tracking-tight"
-                      title={step.txHash}
-                    >
-                      Tx: {step.txHash.length > 20 ? `${step.txHash.slice(0, 10)}...${step.txHash.slice(-8)}` : step.txHash}
+                  <div className="text-[11px] text-[#7A6A5E] font-mono mt-0.5 flex items-center gap-2">
+                    <span className="font-semibold text-[#1E1315]">
+                      Tx: {step.txHash.length > 20 ? `${step.txHash.slice(0, 8)}...${step.txHash.slice(-6)}` : step.txHash}
                     </span>
 
                     <button
                       type="button"
                       onClick={() => handleCopy(step.txHash!)}
                       title="Copy full transaction hash"
-                      className="inline-flex items-center gap-1 text-[10px] text-[#5C4D4F] hover:text-[#1E1315] px-2 py-0.5 rounded-md bg-white border border-[#EBE3D5] hover:border-[#D5C7B5] transition cursor-pointer shadow-2xs font-sans font-medium"
+                      className="p-0.5 rounded hover:bg-[#EFE8D8] text-[#5C4D4F] hover:text-[#1E1315] transition cursor-pointer"
                     >
                       {copiedTx === step.txHash ? (
-                        <>
-                          <Check className="w-3 h-3 text-emerald-600" />
-                          <span className="text-emerald-700 font-bold">Copied!</span>
-                        </>
+                        <Check className="w-3 h-3 text-emerald-600" />
                       ) : (
-                        <>
-                          <Copy className="w-3 h-3" />
-                          <span>Copy Hash</span>
-                        </>
+                        <Copy className="w-3 h-3" />
                       )}
                     </button>
 
@@ -116,9 +109,9 @@ export function StatusRadar({ steps, title = "Live Execution Radar" }: StatusRad
                       href={getExplorerUrl(step.txHash, step.chain)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[#0052FF] hover:underline font-bold inline-flex items-center gap-1 text-[10px] font-sans px-2 py-0.5 rounded-md bg-white border border-[#EBE3D5] hover:border-[#0052FF]/30 transition shadow-2xs"
+                      className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-medium font-sans ml-auto"
                     >
-                      <span>View on {getExplorerName(step.chain)}</span>
+                      <span>{getExplorerName(step.chain)}</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>

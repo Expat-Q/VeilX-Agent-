@@ -69,6 +69,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const sanitizedAmountUsd = Math.max(0.01, parseFloat(String(amountUsd).replace(/[^0-9.]/g, '')) || 10.0);
+    if (sanitizedAmountUsd <= 0) {
+      return NextResponse.json(
+        { error: "amountUsd must be greater than 0" },
+        { status: 400 }
+      );
+    }
+
     const cleanCreator = creatorHandle.replace("@", "").trim();
     const db = await connectToDatabase();
     if (!db) {
@@ -82,7 +90,7 @@ export async function POST(req: Request) {
       slug,
       creatorHandle: cleanCreator,
       recipientNearAccount,
-      amountUsd: Number(amountUsd),
+      amountUsd: sanitizedAmountUsd,
       memo: isPrivate ? "[Encrypted Private Memo]" : memo,
       isPrivate: Boolean(isPrivate),
       memoCiphertext: memoCiphertext || undefined,
