@@ -58,6 +58,23 @@ Veil is designed with a seamless graduation path from the live Testnet environme
 
 ---
 
+## ⚡ NEAR Protocol Technology & Infrastructure Powering Veil
+
+Veil is natively built on NEAR Protocol, leveraging its advanced chain abstraction, cryptographic primitives, and account model to deliver an experience impossible on legacy L1s:
+
+| NEAR Technology / Primitive | How Veil Leverages It | Impact on User Experience & Safety |
+| :--- | :--- | :--- |
+| **NEAR Chain Signatures (MPC)**<br>[`v1.signer-prod.testnet`](https://testnet.nearblocks.io/address/v1.signer-prod.testnet) | Secp256k1 Threshold ECDSA engine running across NEAR validator nodes. Signs and broadcasts transactions on **Base, Arbitrum, and Ethereum** from a single master NEAR account. | Users never hold separate native wallets or gas tokens for each EVM chain. One NEAR account controls universal multichain liquidity. |
+| **Named Subaccount Factory**<br>`@handle.veilx-agent.testnet` | Deterministic on-chain subaccounts provisioned dynamically by the Veil factory (`veilxapp.veilx-agent.testnet`) for any Twitter handle. | **Zero Pre-Coordination**: Senders can tip anyone on 𝕏 before the recipient even has a wallet. Funds sit safely in on-chain subaccount escrow. |
+| **NEP-366 Session Delegation**<br>& Scoped `FunctionCall` Keys | Ed25519 session keys generated client-side in the user's browser, authorized via `addFunctionCallAccessKey` strictly for escrow and MPC contracts with capped gas allowances. | **True Non-Custodial Automation**: The AI agent can execute micro-tips and DCA buys without wallet popups, but *cannot* drain master funds or add keys. |
+| **Gasless Meta-Transactions**<br>(NEP-366 Relayer Sponge) | The Veil relayer sponsors gas fees by signing the outer transaction wrapper for user tip claims. | **Zero Gas Onboarding**: First-time users claiming incoming social tips pay **$0.00 in gas** and need 0 NEAR in their wallet. |
+| **NEAR Intents & Defuse 1Click Solvers**<br>(Cross-Chain Intent Protocol) | Intent-based execution auction connecting NEAR to **38+ blockchains** (Bitcoin, Solana, Dogecoin, Polygon, Arbitrum, Base). | PayLinks allow global payers to pay in SOL, BTC, or ETH, which solvers settle instantly into the recipient's NEAR vault in ~15–25s. |
+| **On-Chain Guardrails Engine**<br>(Rust `near-sdk` v5 Smart Contract) | Dual rolling 24-hour **Daily Spend Caps**, rolling 7-day **Weekly Spend Caps**, per-tx quarantine limits, and instant **Emergency Freeze** state enforced in contract storage. | Mathematical safety: Even if a frontend or database is compromised, the NEAR smart contract rejects any transaction exceeding user spending limits. |
+| **NEP-141 & NEP-145 Standards**<br>(Circle USDC & Storage Management) | Native integration with Circle's NEP-141 USDC contract (`17208628...`) with automatic storage staking registration. | Institutional stablecoin settlement with deterministic decimal precision and trustless peer-to-peer transfers. |
+| **FastNear High-Performance RPC**<br>[`https://test.rpc.fastnear.com`](https://test.rpc.fastnear.com) | Low-latency state queries, transaction broadcasting, and optimistic view cross-checks (`get_tip`, `get_guardrails`). | Instant UI updates (<150ms) for balances, pending tip claims, and contract state changes. |
+
+---
+
 ## 📖 Table of Contents
 1. [What Veil Does & The Problem It Solves](#-what-veil-does--the-problem-it-solves)
 2. [Why Veil Is Technically Unique](#-why-veil-is-technically-unique)
