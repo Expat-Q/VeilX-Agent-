@@ -1,0 +1,24 @@
+{
+  "name": "@veil/agent-plugin",
+  "version": "1.0.0",
+  "description": "Official Veil Agent Plugin for Claude, ChatGPT, ElizaOS, and autonomous finance agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "veil-plugin": "bin/cli.js",
+    "veil-agent-plugin": "bin/cli.js"
+  },
+  "keywords": [
+    "veil",
+    "near",
+    "mcp",
+    "elizaos",
+    "chatgpt-plugin",
+    "claude-plugin",
+    "defi",
+    "dca",
+    "guardrails"
+  ],
+  "author": "Veil Finance",
+  "license": "MIT"
+}

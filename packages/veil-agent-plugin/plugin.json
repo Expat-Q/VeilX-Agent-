@@ -1,0 +1,19 @@
+{
+  "schema_version": "v1",
+  "name_for_model": "veil_finance",
+  "name_for_human": "Veil Finance Copilot",
+  "description_for_model": "Plugin for autonomous omnichain finance, tokenized US equities DCA (TSLAon, NVDAon, AAPLon, SPYon), social tipping by @handle, and cross-chain settlements on NEAR Protocol governed by on-chain guardrails.",
+  "description_for_human": "Trade tokenized equities, send social tips, and execute cross-chain DCA orders with protocol-level guardrails on NEAR Protocol.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://veilx-agent.onrender.com/api/openapi.json"
+  },
+  "mcp": {
+    "endpoint": "https://veilx-agent.onrender.com/api/mcp"
+  },
+  "logo_url": "https://veilx-agent.onrender.com/veil.png",
+  "contact_email": "support@veil.finance"
+}

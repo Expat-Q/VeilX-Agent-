@@ -436,7 +436,48 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
               </p>
             </div>
 
-            {/* Sub-Card 3: Security & Scoped Session Keys Explanation */}
+            {/* Sub-Card 3: Universal Agent CLI & ElizaOS Plugin */}
+            <div className="p-4 rounded-2xl bg-[#FAF7F0] border border-[#EBE3D5] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-indigo-500/15 text-indigo-700 flex items-center justify-center font-bold text-[10px]">
+                    CLI
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-[#1E1315]">Universal Agent Plugin (NPM / ElizaOS)</span>
+                    <p className="text-[10px] text-[#7A6A5E]">Connect custom agents, Eliza bots, or scripts</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleCopy("npx @veil/agent-plugin", "npx-cmd")}
+                  className="px-2.5 py-1 rounded-lg bg-white border border-[#EBE3D5] hover:bg-[#FAF7F0] text-[#1E1315] text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                >
+                  {copiedKey === "npx-cmd" ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-700" />
+                      <span className="text-emerald-700">Copied Command</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Command</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[#1E1315] text-[#FAF7F0] font-mono text-[10px] overflow-x-auto select-all">
+                npx @veil/agent-plugin
+              </div>
+
+              <p className="text-[10px] text-[#7A6A5E] leading-normal">
+                Run in any terminal to inspect available autonomous financial tools or install via <code className="font-mono text-[#1E1315] bg-[#EBE3D5]/50 px-1 py-0.5 rounded">npm i @veil/agent-plugin</code> for ElizaOS agents.
+              </p>
+            </div>
+
+            {/* Sub-Card 4: Security & Scoped Session Keys Explanation */}
             <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2 text-[#78350F]">
               <div className="flex items-center gap-2 text-xs font-bold text-[#92400E]">
                 <Shield className="w-4 h-4 shrink-0" />
