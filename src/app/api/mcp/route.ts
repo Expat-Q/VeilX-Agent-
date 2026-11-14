@@ -65,6 +65,8 @@ export async function POST(req: NextRequest) {
       req.headers.get("authorization") ||
       req.headers.get("x-api-key") ||
       req.headers.get("x-veil-session") ||
+      req.nextUrl.searchParams.get("apiKey") ||
+      req.nextUrl.searchParams.get("key") ||
       body.params?._meta?.apiKey ||
       body.params?.arguments?.apiKey;
     const resolvedUser = await resolveUserFromApiKey(authHeader);

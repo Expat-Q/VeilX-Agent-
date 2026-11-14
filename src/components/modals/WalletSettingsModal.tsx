@@ -86,6 +86,7 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
   const appOrigin = typeof window !== "undefined" ? window.location.origin : "https://veilx-agent.vercel.app";
   const mcpEndpointUrl = `${appOrigin}/api/mcp`;
   const openApiSchemaUrl = `${appOrigin}/api/openapi.json`;
+  const fullMcpUrlWithKey = agentApiKey ? `${mcpEndpointUrl}?key=${agentApiKey}` : mcpEndpointUrl;
 
   const claudeConfigJson = JSON.stringify(
     {
@@ -383,59 +384,64 @@ export function WalletSettingsModal({ isOpen, onClose }: WalletSettingsModalProp
                     KEY
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-[#1E1315]">Your Personal Agent Key</span>
+                    <span className="text-xs font-bold text-[#1E1315]">Your Personal Agent Connection</span>
                     <p className="text-[10px] text-[#7A6A5E]">Uniquely links your NEAR account &amp; wallet to ChatGPT / Claude</p>
                   </div>
                 </div>
 
-                {agentApiKey && (
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => handleCopy(agentApiKey, "agent-key")}
-                    className="px-2.5 py-1 rounded-lg bg-white border border-[#EBE3D5] hover:bg-[#FAF7F0] text-[#1E1315] text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                    onClick={() => handleCopy(fullMcpUrlWithKey, "full-mcp-url")}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
                   >
-                    {copiedKey === "agent-key" ? (
+                    {copiedKey === "full-mcp-url" ? (
                       <>
-                        <Check className="w-3.5 h-3.5 text-emerald-700" />
-                        <span className="text-emerald-700">Copied Key</span>
+                        <Check className="w-3.5 h-3.5 text-white" />
+                        <span>Copied MCP URL</span>
                       </>
                     ) : (
                       <>
                         <Copy className="w-3.5 h-3.5" />
-                        <span>Copy Key</span>
+                        <span>Copy MCP URL with Key</span>
                       </>
                     )}
                   </button>
-                )}
+                  {agentApiKey && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(agentApiKey, "agent-key")}
+                      className="px-2 py-1 rounded-lg bg-white border border-[#EBE3D5] hover:bg-[#FAF7F0] text-[#1E1315] text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                      title="Copy Raw Key Only"
+                    >
+                      {copiedKey === "agent-key" ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>Raw Key</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-white border border-[#EBE3D5] flex items-center justify-between gap-2 font-mono text-[11px] text-[#1E1315] select-all break-all">
-                <span>
-                  {loadingApiKey
-                    ? "Generating your personal agent key..."
-                    : showApiKey
-                    ? agentApiKey
-                    : agentApiKey
-                    ? `${agentApiKey.slice(0, 16)}••••••••••••••••${agentApiKey.slice(-6)}`
-                    : "veil_live_guest_default"}
+              {/* Direct Server URL to paste */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-[#92400E] block uppercase tracking-wider">
+                  Option 1: Direct Server URL (Recommended - Leave Auth as None)
                 </span>
-                {agentApiKey && (
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="p-1 text-[#7A6A5E] hover:text-[#1E1315] transition cursor-pointer"
-                  >
-                    {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                )}
+                <div className="p-2.5 rounded-xl bg-white border border-[#EBE3D5] flex items-center justify-between gap-2 font-mono text-[11px] text-[#1E1315] select-all break-all">
+                  <span>{fullMcpUrlWithKey}</span>
+                </div>
               </div>
 
-              <div className="text-[10px] text-[#7A6A5E] leading-relaxed space-y-1">
+              <div className="text-[10px] text-[#7A6A5E] leading-relaxed space-y-1 pt-1 border-t border-amber-500/20">
                 <p>
-                  <strong>How to use in ChatGPT:</strong> In the <em>Add custom MCP server</em> modal, change <strong>Authentication</strong> to <strong>API Key</strong> (or Bearer Token) and paste this key.
+                  <strong>How to fill the ChatGPT modal:</strong>
                 </p>
-                <p>
-                  This links your exact account (<code className="font-mono text-[#1E1315] font-semibold">{user?.nearAccountId || "your.veilx-agent.testnet"}</code>) so the assistant accesses your authentic on-chain balances, positions, and spending guardrails.
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>In <strong>Connection: Server URL</strong>, paste the URL above (it already includes your personal key).</li>
+                  <li>In <strong>Authentication</strong>, select <strong>None</strong> (no complex passwords or OAuth needed).</li>
+                  <li>Check <em>&quot;I understand and want to continue&quot;</em> and click save!</li>
+                </ul>
+                <p className="pt-1">
+                  This connects your exact account (<code className="font-mono text-[#1E1315] font-semibold">{user?.nearAccountId || "your.veilx-agent.testnet"}</code>) so ChatGPT displays your real on-chain balances, stock positions, and spending guardrails.
                 </p>
               </div>
             </div>
